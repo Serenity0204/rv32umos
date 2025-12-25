@@ -11,7 +11,7 @@ MACHINE_DIR := core/machine
 
 
 # Sources and objects
-SRCS := main.cpp $(wildcard $(MACHINE_DIR)/*.cpp)
+SRCS := core/main.cpp $(wildcard $(MACHINE_DIR)/*.cpp)
 OBJS := $(SRCS:%.cpp=$(OBJ_DIR)/%.o)
 
 # Default target

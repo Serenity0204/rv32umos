@@ -38,7 +38,7 @@ void Memory::store(Addr addr, Word size, Word value)
     Addr index = addr - MEMORY_BASE;
     for (Word i = 0; i < size; ++i)
     {
-        Word word = (value >> (i * 8)) & ByteMask;
+        Word word = (value >> (i * 8)) & 0xFF;
         this->memory[index + i] = word;
     }
 }

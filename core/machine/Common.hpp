@@ -10,9 +10,6 @@ using Word = uint32_t;
 using Reg = uint32_t;
 using Addr = uint32_t;
 
-// masks
-const Byte ByteMask = 0xFF;
-
 // Memory
 const Addr MEMORY_BASE = 0x80000000;
 // 128MB

@@ -5,14 +5,12 @@ CPU::CPU(Bus& bus_ref) : bus(bus_ref)
     this->reset();
 }
 
-CPU::~CPU()
-{
-}
-
 void CPU::reset()
 {
     this->pc = MEMORY_BASE;
     this->regs.reset();
+
+    this->regs.write(2, MEMORY_BASE + MEMORY_SIZE);
 }
 
 Word CPU::fetch()
@@ -20,16 +18,16 @@ Word CPU::fetch()
     return this->bus.load(this->pc, 4);
 }
 
-void CPU::execute(Word inst)
+void CPU::execute(Word instr)
 {
-    std::cout << "Exec: 0x" << std::hex << inst << std::endl;
+    std::cout << "Exec: 0x" << std::hex << instr << std::endl;
 }
 
 void CPU::step()
 {
-    Word inst = this->fetch();
+    Word instr = this->fetch();
     this->pc += 4;
-    this->execute(inst);
+    this->execute(instr);
 }
 
 void CPU::dumpRegisters()

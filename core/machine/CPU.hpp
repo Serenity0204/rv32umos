@@ -1,13 +1,17 @@
 #pragma once
 #include "Bus.hpp"
 #include "Common.hpp"
+#include "Decoder.hpp"
+#include "Executor.hpp"
 #include "RegFile.hpp"
+#include "Utils.hpp"
 
 class CPU
 {
 public:
+    friend class Executor;
     CPU(Bus& bus_ref);
-    ~CPU();
+    ~CPU() = default;
 
     void step();
     void reset();
@@ -19,5 +23,5 @@ private:
     Addr pc;
 
     Word fetch();
-    void execute(Word inst);
+    void execute(Word instr);
 };

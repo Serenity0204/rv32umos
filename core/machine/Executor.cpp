@@ -274,8 +274,36 @@ void Executor::execSH(CPU& cpu, Word instr) {}
 void Executor::execSW(CPU& cpu, Word instr) {}
 
 // Jump
-void Executor::execJAL(CPU& cpu, Word instr) {}
-void Executor::execJALR(CPU& cpu, Word instr) {}
+void Executor::execJAL(CPU& cpu, Word instr)
+{
+    Word rd = Decoder::rd(instr);
+    Word imm = Decoder::immJ(instr);
+
+    // already pc + 4
+    Addr returnAddrPC = cpu.pc;
+    Addr currentPC = cpu.pc - 4;
+
+    if (rd != 0) cpu.regs.write(rd, returnAddrPC);
+
+    Addr nextPC = currentPC + imm;
+    cpu.pc = nextPC;
+}
+
+void Executor::execJALR(CPU& cpu, Word instr)
+{
+    Word rd = Decoder::rd(instr);
+    Word rs1 = Decoder::rs1(instr);
+    // JALR is I type
+    Word imm = Decoder::immI(instr);
+    Word val1 = cpu.regs[rs1];
+
+    // already pc + 4
+    Addr returnAddrPC = cpu.pc;
+
+    if (rd != 0) cpu.regs.write(rd, returnAddrPC);
+    Addr nextPC = (val1 + imm) & ~1;
+    cpu.pc = nextPC;
+}
 
 // Branch
 void Executor::execBEQ(CPU& cpu, Word instr) {}

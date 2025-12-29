@@ -492,3 +492,5 @@ void Executor::execBGEU(CPU& cpu, Word instr)
         cpu.pc = nextPC;
     }
 }
+
+F

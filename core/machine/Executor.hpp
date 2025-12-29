@@ -3,6 +3,7 @@
 #include "Common.hpp"
 #include "Decoder.hpp"
 #include "Utils.hpp"
+#include <limits>
 
 class CPU;
 
@@ -85,4 +86,14 @@ public:
     static void execBGE(CPU& cpu, Word instr);
     static void execBLTU(CPU& cpu, Word instr);
     static void execBGEU(CPU& cpu, Word instr);
+
+    // M Extension
+    static void execMUL(CPU& cpu, Word instr);
+    static void execMULH(CPU& cpu, Word instr);
+    static void execMULHSU(CPU& cpu, Word instr);
+    static void execMULHU(CPU& cpu, Word instr);
+    static void execDIV(CPU& cpu, Word instr);
+    static void execDIVU(CPU& cpu, Word instr);
+    static void execREM(CPU& cpu, Word instr);
+    static void execREMU(CPU& cpu, Word instr);
 };

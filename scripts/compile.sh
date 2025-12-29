@@ -26,7 +26,7 @@ LD=riscv64-unknown-elf-ld
 OBJCOPY=riscv64-unknown-elf-objcopy
 
 # Flags
-CFLAGS="-march=rv32i -mabi=ilp32 -c"
+CFLAGS="-march=rv32im -mabi=ilp32 -c -nostdlib -fno-builtin"
 LDFLAGS="-m elf32lriscv -Ttext 0x80000000"
 
 echo "--- Building $SOURCE_FILE in directory: $DIR_NAME ---"

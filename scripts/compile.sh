@@ -31,8 +31,8 @@ LD=riscv64-unknown-elf-ld
 OBJCOPY=riscv64-unknown-elf-objcopy
 
 # Flags
-CFLAGS="-march=rv32im -mabi=ilp32 -c -nostdlib -fno-builtin"
-LDFLAGS="-m elf32lriscv -Ttext 0x80000000"
+CFLAGS="-march=rv32im -mabi=ilp32 -c -nostdlib -fno-builtin -mno-relax"
+LDFLAGS="-m elf32lriscv -T scripts/linker.ld -nostdlib"
 
 echo "--- Building $SOURCE_FILE in directory: $DIR_NAME ---"
 # Step 1: Compile Helpers (start.S & syscalls.c)

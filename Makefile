@@ -9,6 +9,9 @@ TARGET := rv32sysemu
 OBJ_DIR := build
 MACHINE_DIR := core/machine
 
+# Programs
+PROGRAMS_DIR := programs
+PROGRAM_SOURCES := $(wildcard $(PROGRAMS_DIR)/*.c)
 
 # Sources and objects
 SRCS := core/main.cpp $(wildcard $(MACHINE_DIR)/*.cpp)
@@ -30,5 +33,12 @@ $(OBJ_DIR)/%.o: %.cpp
 clean:
 	rm -rf $(OBJ_DIR) $(TARGET)
 	rm -f examples/*.bin
-	
+	rm lib/*.o
+
+programs:
+	@for src in $(PROGRAM_SOURCES); do \
+		echo "[PROGRAM] Compiling $$src"; \
+		scripts/compile.sh $$src; \
+	done
+
 .PHONY: all clean

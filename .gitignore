@@ -2,4 +2,7 @@ build/
 rv32sysemu
 .vscode/
 
-examples/*.bin
+programs/*.bin
+
+lib/start.o
+lib/syscall.o

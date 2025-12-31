@@ -273,7 +273,7 @@ void Executor::execECALL(CPU& cpu, Word instr)
 
     switch (syscallID)
     {
-    case 93:
+    case 0:
     {
         cpu.halted = true;
         break;

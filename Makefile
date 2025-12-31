@@ -34,7 +34,8 @@ all: $(TARGET) programs
 # Clean
 clean:
 	rm -rf $(OBJ_DIR) $(TARGET)
-	rm -f examples/*.bin
+	rm -f programs/*.bin
+	rm -f programs/*.o
 	rm lib/*.o
 
 programs:

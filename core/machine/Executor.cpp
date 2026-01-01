@@ -274,14 +274,16 @@ void Executor::execAND(CPU& cpu, Word instr)
 // // --- System ---
 void Executor::execECALL(CPU& cpu)
 {
-    Word syscallID = cpu.regs[17];
+    SyscallID syscallID = static_cast<SyscallID>(cpu.regs[17]);
 
     switch (syscallID)
     {
-    case 0:
-        throw SyscallException("exit syscall");
+    case SyscallID::SYS_EXIT:
+        throw SyscallException("exit syscall", SyscallID::SYS_EXIT);
+    case SyscallID::SYS_WRITE:
+        throw SyscallException("write syscall", SyscallID::SYS_WRITE);
     default:
-        throw SyscallException("Unknown syscall ID: " + std::to_string(syscallID));
+        throw SyscallException("Unknown syscall ID: " + std::to_string(static_cast<int>(syscallID)), SyscallID::SYS_UNKNOWN);
     }
 }
 // void Executor::execEBREAK(CPU& cpu, Word instr) {}

@@ -22,12 +22,12 @@ Memory::Memory()
     this->memory.resize(MEMORY_SIZE);
 }
 
-Word Memory::load(Addr addr, Word size)
+Word Memory::load(Addr addr, std::size_t size)
 {
     assert(!(addr < MEMORY_BASE || addr >= MEMORY_BASE + MEMORY_SIZE));
     Addr index = addr - MEMORY_BASE;
     Word value = 0;
-    for (Word i = 0; i < size; ++i)
+    for (std::size_t i = 0; i < size; ++i)
     {
         Word word = static_cast<Word>(this->memory[index + i]) << (i * 8);
         value |= word;
@@ -35,11 +35,11 @@ Word Memory::load(Addr addr, Word size)
     return value;
 }
 
-void Memory::store(Addr addr, Word size, Word value)
+void Memory::store(Addr addr, std::size_t size, Word value)
 {
     assert(!(addr < MEMORY_BASE || addr >= MEMORY_BASE + MEMORY_SIZE));
     Addr index = addr - MEMORY_BASE;
-    for (Word i = 0; i < size; ++i)
+    for (std::size_t i = 0; i < size; ++i)
     {
         Word word = (value >> (i * 8)) & 0xFF;
         this->memory[index + i] = word;

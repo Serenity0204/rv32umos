@@ -3,12 +3,12 @@
 
 Bus::Bus(Memory& memory_ref) : memory(memory_ref) {}
 
-Word Bus::load(Addr addr, Word size)
+Word Bus::load(Addr addr, std::size_t size)
 {
     return this->memory.load(addr, size);
 }
 
-void Bus::store(Addr addr, Word size, Word value)
+void Bus::store(Addr addr, std::size_t size, Word value)
 {
     this->memory.store(addr, size, value);
 }

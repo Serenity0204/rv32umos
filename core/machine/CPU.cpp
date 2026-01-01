@@ -330,3 +330,8 @@ void CPU::dumpRegisters()
         std::cout << "x" << std::dec << i << ": " << std::hex << this->regs[i] << "\n";
     }
 }
+
+Word CPU::load(Addr addr, std::size_t size)
+{
+    return this->bus.load(addr, size);
+}

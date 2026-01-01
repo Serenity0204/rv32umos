@@ -22,7 +22,10 @@ public:
     inline void advancePC() { this->pc += 4; }
 
     // reg
-    inline Word readReg(size_t index) { return this->regs[index]; }
+    inline Word readReg(std::size_t index) { return this->regs[index]; }
+    inline void writeReg(std::size_t index, Word value) { this->regs.write(index, value); }
+    // memory
+    Word load(Addr addr, std::size_t size);
 
     // status
     inline bool isHalted() { return this->halted; }

@@ -2,11 +2,6 @@
 #include "CPU.hpp"
 #include "Exception.hpp"
 
-enum class SyscallID
-{
-    SYS_EXIT = 0
-};
-
 class Kernel
 {
 public:

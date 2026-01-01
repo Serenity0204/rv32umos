@@ -1,6 +1,7 @@
-#include "machine/Bus.hpp"
-#include "machine/CPU.hpp"
-#include "machine/Memory.hpp"
+#include "Bus.hpp"
+#include "CPU.hpp"
+#include "Kernel.hpp"
+#include "Memory.hpp"
 #include <iostream>
 #include <string>
 
@@ -26,29 +27,9 @@ int main(int argc, char* argv[])
     Bus bus(memory);
     CPU cpu(bus);
     cpu.reset();
+    Kernel kernel(cpu);
 
-    std::cout << "Simulation started..." << std::endl;
+    kernel.run();
 
-    uint64_t instructions = 0;
-    while (!cpu.isHalted())
-    {
-        try
-        {
-            cpu.step();
-            instructions++;
-        }
-        catch (std::exception& e)
-        {
-            std::cerr << "Exception: " << e.what() << std::endl;
-            break;
-        }
-    }
-
-    // x10 (a0)
-    Word result = cpu.readReg(10);
-    std::cout << "--------------------------------\n";
-    std::cout << "Simulation finished in " << std::dec << instructions << " instructions.\n";
-    std::cout << "Exit Code (x10): " << result << "\n";
-    std::cout << "--------------------------------\n";
     return 1;
 }

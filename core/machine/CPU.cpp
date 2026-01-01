@@ -319,7 +319,6 @@ void CPU::execute(Word instr)
 void CPU::step()
 {
     Word instr = this->fetch();
-    this->pc += 4;
     this->execute(instr);
 }
 

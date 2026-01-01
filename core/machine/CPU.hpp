@@ -16,9 +16,17 @@ public:
     void step();
     void reset();
     void dumpRegisters();
+
+    // PC
     inline Addr getPC() { return this->pc; }
+    inline void advancePC() { this->pc += 4; }
+
+    // reg
     inline Word readReg(size_t index) { return this->regs[index]; }
+
+    // status
     inline bool isHalted() { return this->halted; }
+    inline void halt() { this->halted = true; }
 
 private:
     bool halted;

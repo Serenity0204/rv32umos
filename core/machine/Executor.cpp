@@ -1,4 +1,10 @@
 #include "Executor.hpp"
+#include "Bus.hpp"
+#include "CPU.hpp"
+#include "Decoder.hpp"
+#include "Exception.hpp"
+#include "Utils.hpp"
+#include <limits>
 
 // Immediates
 void Executor::execLUI(CPU& cpu, Word instr)
@@ -13,7 +19,7 @@ void Executor::execAUIPC(CPU& cpu, Word instr)
     Word rd = Decoder::rd(instr);
     if (rd == 0) return;
     Word imm = Decoder::immU(instr);
-    Word currentPC = cpu.pc - 4;
+    Word currentPC = cpu.pc;
     cpu.regs.write(rd, currentPC + imm);
 }
 
@@ -266,22 +272,16 @@ void Executor::execAND(CPU& cpu, Word instr)
 // void Executor::execCSRRCI(CPU& cpu, Word instr) {}
 
 // // --- System ---
-void Executor::execECALL(CPU& cpu, Word instr)
+void Executor::execECALL(CPU& cpu)
 {
-    (void)instr;
     Word syscallID = cpu.regs[17];
 
     switch (syscallID)
     {
     case 0:
-    {
-        cpu.halted = true;
-        break;
-    }
+        throw SyscallException("exit syscall");
     default:
-        std::cerr << "Unknown Syscall ID: " << syscallID << std::endl;
-        cpu.halted = true;
-        break;
+        throw SyscallException("Unknown syscall ID: " + std::to_string(syscallID));
     }
 }
 // void Executor::execEBREAK(CPU& cpu, Word instr) {}
@@ -390,13 +390,12 @@ void Executor::execJAL(CPU& cpu, Word instr)
     Word rd = Decoder::rd(instr);
     Word imm = Decoder::immJ(instr);
 
-    // already pc + 4
-    Addr returnAddrPC = cpu.pc;
-    Addr currentPC = cpu.pc - 4;
+    Addr returnAddrPC = cpu.pc + 4;
+    Addr currentPC = cpu.pc;
 
     if (rd != 0) cpu.regs.write(rd, returnAddrPC);
 
-    Addr nextPC = currentPC + imm;
+    Addr nextPC = currentPC + imm - 4;
     cpu.pc = nextPC;
 }
 
@@ -408,11 +407,10 @@ void Executor::execJALR(CPU& cpu, Word instr)
     Word imm = Decoder::immI(instr);
     Word val1 = cpu.regs[rs1];
 
-    // already pc + 4
-    Addr returnAddrPC = cpu.pc;
+    Addr returnAddrPC = cpu.pc + 4;
 
     if (rd != 0) cpu.regs.write(rd, returnAddrPC);
-    Addr nextPC = (val1 + imm) & ~1;
+    Addr nextPC = ((val1 + imm) & ~1) - 4;
     cpu.pc = nextPC;
 }
 

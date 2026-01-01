@@ -275,17 +275,14 @@ void Executor::execAND(CPU& cpu, Word instr)
 void Executor::execECALL(CPU& cpu)
 {
     SyscallID syscallID = static_cast<SyscallID>(cpu.regs[17]);
+    bool exist = sysCallNameMap.count(syscallID) > 0;
 
-    switch (syscallID)
-    {
-    case SyscallID::SYS_EXIT:
-        throw SyscallException("exit syscall", SyscallID::SYS_EXIT);
-    case SyscallID::SYS_WRITE:
-        throw SyscallException("write syscall", SyscallID::SYS_WRITE);
-    default:
-        throw SyscallException("Unknown syscall ID: " + std::to_string(static_cast<int>(syscallID)), SyscallID::SYS_UNKNOWN);
-    }
+    if (!exist) throw SyscallException("Unknown syscall ID: " + std::to_string(static_cast<int>(syscallID)), SyscallID::SYS_UNKNOWN);
+
+    std::string syscallName = sysCallNameMap.at(syscallID);
+    throw SyscallException(syscallName, syscallID);
 }
+
 // void Executor::execEBREAK(CPU& cpu, Word instr) {}
 // void Executor::execSRET(CPU& cpu, Word instr) {}
 // void Executor::execURET(CPU& cpu, Word instr) {}

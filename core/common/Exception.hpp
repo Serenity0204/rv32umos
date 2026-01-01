@@ -1,13 +1,7 @@
 #pragma once
+#include "Syscall.hpp"
 #include <exception>
 #include <string>
-
-enum class SyscallID : int
-{
-    SYS_EXIT = 0,
-    SYS_WRITE = 1,
-    SYS_UNKNOWN = -1,
-};
 
 enum class FileDescriptor : int
 {

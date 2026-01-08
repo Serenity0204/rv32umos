@@ -299,7 +299,7 @@ void Executor::execLB(CPU& cpu, Word instr)
     Word imm = Decoder::immI(instr);
     Addr addr = cpu.regs[rs1] + imm;
 
-    Word val = cpu.bus.load(addr, 1);
+    Word val = cpu.loadVirtualMemory(addr, 1);
 
     int32_t signedVal = static_cast<int32_t>(static_cast<int8_t>(val));
     cpu.regs.write(rd, signedVal);
@@ -312,7 +312,7 @@ void Executor::execLH(CPU& cpu, Word instr)
     Word imm = Decoder::immI(instr);
     Addr addr = cpu.regs[rs1] + imm;
 
-    Word val = cpu.bus.load(addr, 2);
+    Word val = cpu.loadVirtualMemory(addr, 2);
     int32_t signedVal = static_cast<int32_t>(static_cast<int16_t>(val));
     cpu.regs.write(rd, signedVal);
 }
@@ -325,7 +325,7 @@ void Executor::execLW(CPU& cpu, Word instr)
     Word imm = Decoder::immI(instr);
     Addr addr = cpu.regs[rs1] + imm;
 
-    Word val = cpu.bus.load(addr, 4);
+    Word val = cpu.loadVirtualMemory(addr, 4);
     cpu.regs.write(rd, val);
 }
 void Executor::execLBU(CPU& cpu, Word instr)
@@ -336,7 +336,7 @@ void Executor::execLBU(CPU& cpu, Word instr)
     Word imm = Decoder::immI(instr);
     Addr addr = cpu.regs[rs1] + imm;
 
-    Word val = cpu.bus.load(addr, 1);
+    Word val = cpu.loadVirtualMemory(addr, 1);
     cpu.regs.write(rd, val & 0xFF);
 }
 void Executor::execLHU(CPU& cpu, Word instr)
@@ -347,7 +347,7 @@ void Executor::execLHU(CPU& cpu, Word instr)
     Word imm = Decoder::immI(instr);
     Addr addr = cpu.regs[rs1] + imm;
 
-    Word val = cpu.bus.load(addr, 2);
+    Word val = cpu.loadVirtualMemory(addr, 2);
     cpu.regs.write(rd, val & 0xFFFF);
 }
 
@@ -360,7 +360,7 @@ void Executor::execSB(CPU& cpu, Word instr)
 
     Addr addr = cpu.regs[rs1] + imm;
     Word val = cpu.regs[rs2];
-    cpu.bus.store(addr, 1, val);
+    cpu.storeVirtualMemory(addr, 1, val);
 }
 void Executor::execSH(CPU& cpu, Word instr)
 {
@@ -370,7 +370,7 @@ void Executor::execSH(CPU& cpu, Word instr)
 
     Addr addr = cpu.regs[rs1] + imm;
     Word val = cpu.regs[rs2];
-    cpu.bus.store(addr, 2, val);
+    cpu.storeVirtualMemory(addr, 2, val);
 }
 void Executor::execSW(CPU& cpu, Word instr)
 {
@@ -380,7 +380,7 @@ void Executor::execSW(CPU& cpu, Word instr)
 
     Addr addr = cpu.regs[rs1] + imm;
     Word val = cpu.regs[rs2];
-    cpu.bus.store(addr, 4, val);
+    cpu.storeVirtualMemory(addr, 4, val);
 }
 
 // Jump

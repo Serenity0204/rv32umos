@@ -1,8 +1,11 @@
 #include "Kernel.hpp"
+#include "Logger.hpp"
+#include "Utils.hpp"
 #include <fstream>
 #include <iostream>
 #include <unistd.h>
 #include <vector>
+
 using ProcessState = Process::ProcessState;
 
 Kernel::Kernel()
@@ -34,7 +37,8 @@ void Kernel::handleSyscall(SyscallID syscallID)
         {
             Process* current = this->processList[this->currentProcessIndex];
             current->setState(ProcessState::TERMINATED);
-            std::cout << "[Kernel] Process " << current->getPid() << " exited with code " << exitCode << ".\n";
+            LOG(KERNEL, INFO, "Process " + std::to_string(current->getPid()) + " exited with code " + std::to_string(exitCode) + ".");
+
             this->schedule();
             return;
         }
@@ -44,6 +48,8 @@ void Kernel::handleSyscall(SyscallID syscallID)
     }
     case SyscallID::SYS_WRITE:
     {
+        LOG(SYSCALL, DEBUG, "Write called by PID " + std::to_string(this->currentProcessIndex + 1));
+
         Word rawFD = this->cpu.readReg(10);
         Word addr = this->cpu.readReg(11);
         Word count = this->cpu.readReg(12);
@@ -60,6 +66,8 @@ void Kernel::handleSyscall(SyscallID syscallID)
 
             int hostFD = (fd == FileDescriptor::STDOUT) ? STDOUT_FILENO : STDERR_FILENO;
             ssize_t written = ::write(hostFD, hostBuffer.data(), count);
+            std::cout.flush();
+
             this->cpu.writeReg(10, written);
             this->cpu.advancePC();
             return;
@@ -72,6 +80,8 @@ void Kernel::handleSyscall(SyscallID syscallID)
     }
     case SyscallID::SYS_READ:
     {
+        LOG(SYSCALL, DEBUG, "Read called by PID " + std::to_string(this->currentProcessIndex + 1));
+
         Word rawFD = this->cpu.readReg(10);
         Word addr = this->cpu.readReg(11);
         Word count = this->cpu.readReg(12);
@@ -102,8 +112,8 @@ void Kernel::handleSyscall(SyscallID syscallID)
     }
     default:
     {
-        std::cout << "Unimplemented syscall id:" << static_cast<int>(syscallID) << std::endl;
-        exit(1);
+        LOG(SYSCALL, ERROR, "Unimplemented syscall id: " + std::to_string((int)syscallID));
+        this->cpu.halt();
     }
     }
 }
@@ -119,11 +129,12 @@ void Kernel::handlePageFault(Addr faultAddr)
         if (this->currentProcessIndex != -1)
             (*this->processList[this->currentProcessIndex]->getPageTable())[vpn] = (paddr & 0xFFFFF000) | 0x1;
 
+        LOG(MMU, DEBUG, "Stack expanded for PID " + std::to_string(currentProcessIndex + 1));
         return;
     }
 
     // If it's not stack, it's a real crash (SegFault)
-    std::cerr << "Segmentation Fault: Access to invalid address 0x" << std::hex << faultAddr << "\n";
+    LOG(KERNEL, ERROR, "Segmentation Fault: Invalid access at " + Utils::toHex(faultAddr));
     if (this->currentProcessIndex != -1)
     {
         this->processList[this->currentProcessIndex]->setState(ProcessState::TERMINATED);
@@ -164,6 +175,7 @@ bool Kernel::createProcess(const std::string& filename)
     }
 
     this->processList.push_back(process);
+    LOG(LOADER, INFO, "Created Process " + std::to_string(newPid) + ": " + filename);
     return true;
 }
 
@@ -218,7 +230,7 @@ void Kernel::schedule()
 
         if (allDead)
         {
-            std::cout << "[Scheduler] All processes terminated.\n";
+            LOG(SCHEDULER, INFO, "All processes terminated.");
             this->cpu.halt();
         }
         return;
@@ -226,6 +238,10 @@ void Kernel::schedule()
 
     // Perform Switch
     Process* nextProcess = this->processList[nextIndex];
+
+    if (nextIndex != currentProcessIndex)
+        LOG(SCHEDULER, INFO, "Switching to PID " + std::to_string(nextProcess->getPid()));
+
     this->contextSwitch(nextProcess);
     this->currentProcessIndex = nextIndex;
 }
@@ -244,7 +260,7 @@ void Kernel::run()
     }
     if (!hasReady)
     {
-        std::cout << "[Kernel] No READY processes.\n";
+        LOG(KERNEL, WARNING, "No READY processes.");
         return;
     }
 
@@ -258,7 +274,7 @@ void Kernel::run()
     this->cpu.enableVM(true);
     first->setState(ProcessState::RUNNING);
 
-    std::cout << "Simulation started..." << std::endl;
+    LOG(KERNEL, INFO, "Simulation started...");
     uint64_t instructions = 0;
 
     while (!this->cpu.isHalted())
@@ -280,14 +296,15 @@ void Kernel::run()
         }
         catch (std::exception& e)
         {
-            std::cerr << "Unexpected exception: " << e.what() << std::endl;
+            LOG(KERNEL, ERROR, "Unexpected exception: " + std::string(e.what()));
+            this->cpu.halt();
             break;
         }
 
         if (instructions % TIME_QUANTUM == 0) this->schedule();
     }
 
-    std::cout << "--------------------------------\n";
-    std::cout << "Simulation finished in " << std::dec << instructions << " instructions.\n";
-    std::cout << "--------------------------------\n";
+    // std::cout << "--------------------------------\n";
+    LOG(KERNEL, INFO, "Simulation finished in " + std::to_string(instructions) + " instructions.");
+    // std::cout << "--------------------------------\n";
 }

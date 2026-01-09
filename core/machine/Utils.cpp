@@ -15,8 +15,15 @@ uint32_t Utils::extractBits(uint32_t value, int start, int end)
 
 [[noreturn]] void Utils::illegal(Word instr, const char* why)
 {
-    std::cerr << "Illegal instruction: 0x"
+    std::cerr << "CPU: Illegal instruction: 0x"
               << std::hex << instr << std::dec
-              << " (" << why << ")\n";
+              << " (" << why << "), Kernel Crashed.\n";
     std::exit(1);
+}
+
+std::string Utils::toHex(uint32_t val)
+{
+    std::stringstream ss;
+    ss << "0x" << std::hex << val;
+    return ss.str();
 }

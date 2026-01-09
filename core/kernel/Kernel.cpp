@@ -1,5 +1,6 @@
 #include "Kernel.hpp"
 #include "Logger.hpp"
+#include "Stats.hpp"
 #include "Utils.hpp"
 #include <fstream>
 #include <iostream>
@@ -28,6 +29,8 @@ Kernel::~Kernel()
 
 void Kernel::handleSyscall(SyscallID syscallID)
 {
+    STATS.incSyscalls();
+
     switch (syscallID)
     {
     case SyscallID::SYS_EXIT:
@@ -120,6 +123,8 @@ void Kernel::handleSyscall(SyscallID syscallID)
 
 void Kernel::handlePageFault(Addr faultAddr)
 {
+    STATS.incPageFaults();
+
     // if it's under stack limit, allocate one physical page and set the page table entry
     if (faultAddr >= STACK_LIMIT && faultAddr < STACK_TOP)
     {
@@ -161,6 +166,9 @@ bool Kernel::createProcess(const std::string& filename)
 
     while (file.read(buffer, 4096) || file.gcount() > 0)
     {
+        STATS.incDiskReads();
+        STATS.incAllocatedFrames();
+
         size_t bytesRead = file.gcount();
 
         Addr paddr = this->pmm.allocateFrame();
@@ -181,6 +189,8 @@ bool Kernel::createProcess(const std::string& filename)
 
 void Kernel::contextSwitch(Process* nextProcess)
 {
+    STATS.incContextSwitches();
+
     // Save Current State (if valid)
     if (this->currentProcessIndex != -1)
     {
@@ -275,6 +285,7 @@ void Kernel::run()
     first->setState(ProcessState::RUNNING);
 
     LOG(KERNEL, INFO, "Simulation started...");
+    // for context switching only
     uint64_t instructions = 0;
 
     while (!this->cpu.isHalted())
@@ -282,8 +293,9 @@ void Kernel::run()
         try
         {
             this->cpu.step();
-            this->cpu.advancePC();
+            STATS.incInstructions();
             instructions++;
+            this->cpu.advancePC();
         }
         catch (SyscallException& sys)
         {
@@ -304,7 +316,5 @@ void Kernel::run()
         if (instructions % TIME_QUANTUM == 0) this->schedule();
     }
 
-    // std::cout << "--------------------------------\n";
-    LOG(KERNEL, INFO, "Simulation finished in " + std::to_string(instructions) + " instructions.");
-    // std::cout << "--------------------------------\n";
+    STATS.printSummary();
 }

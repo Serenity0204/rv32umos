@@ -2,6 +2,7 @@
 #include "Logger.hpp"
 #include "Stats.hpp"
 #include "Utils.hpp"
+#include <elf.h>
 #include <fstream>
 #include <iostream>
 #include <unistd.h>
@@ -125,17 +126,76 @@ void Kernel::handlePageFault(Addr faultAddr)
 {
     STATS.incPageFaults();
 
+    if (this->currentProcessIndex == -1)
+    {
+        this->cpu.halt();
+        return;
+    }
+
+    Process* process = this->processList[this->currentProcessIndex];
+    Addr vpn = faultAddr >> 12;
+
     // if it's under stack limit, allocate one physical page and set the page table entry
     if (faultAddr >= STACK_LIMIT && faultAddr < STACK_TOP)
     {
         Addr paddr = this->pmm.allocateFrame();
-        Addr vpn = faultAddr >> 12;
 
-        if (this->currentProcessIndex != -1)
-            (*this->processList[this->currentProcessIndex]->getPageTable())[vpn] = (paddr & 0xFFFFF000) | 0x1;
+        PTE& pte = (*process->getPageTable())[vpn];
+        Addr ppn = paddr >> 12;
+        pte.ppn = ppn;
+        pte.valid = true;
+        pte.canRead = true;
+        pte.canWrite = true;
+        pte.referenced = true;
 
-        LOG(MMU, DEBUG, "Stack expanded for PID " + std::to_string(currentProcessIndex + 1));
+        STATS.incAllocatedFrames();
+        LOG(MMU, DEBUG, "Stack Page Allocated: " + Utils::toHex(faultAddr));
         return;
+    }
+
+    // check for segments for lazy loading
+    for (const Segment& seg : process->getSegments())
+    {
+        // if fault within this segment
+        if (faultAddr >= seg.vaddr && faultAddr < seg.vaddr + seg.memSize)
+        {
+            Addr paddr = this->pmm.allocateFrame();
+            STATS.incAllocatedFrames();
+
+            // Calculate offsets
+            Addr pageStartVAddr = vpn * PAGE_SIZE;
+            size_t offsetInSegment = pageStartVAddr - seg.vaddr;
+            size_t filePos = seg.fileOffset + offsetInSegment;
+
+            // Prepare buffer
+            std::vector<char> buffer(PAGE_SIZE, 0);
+
+            // Logic: Read from file if within fileSize; otherwise 0 (BSS)
+            if (offsetInSegment < seg.fileSize)
+            {
+                size_t bytesToRead = std::min((size_t)PAGE_SIZE, seg.fileSize - offsetInSegment);
+
+                std::ifstream file(process->getName(), std::ios::binary);
+                file.seekg(filePos);
+                file.read(buffer.data(), bytesToRead);
+                STATS.incDiskReads();
+            }
+
+            // Write to Physical RAM
+            for (size_t i = 0; i < PAGE_SIZE; i++) this->cpu.storePhysicalMemory(paddr + i, 1, static_cast<Word>(buffer[i]));
+
+            // Update PTE Struct
+            PTE& pte = (*process->getPageTable())[vpn];
+            Addr ppn = paddr >> 12;
+            pte.ppn = ppn;
+            pte.valid = true;
+            pte.referenced = true;
+            // Set R/W/X permissions
+            PTE::setPTEFlagsFromElf(pte, seg.flags);
+
+            LOG(MMU, DEBUG, "Segment Page Loaded: " + Utils::toHex(pageStartVAddr));
+            return;
+        }
     }
 
     // If it's not stack, it's a real crash (SegFault)
@@ -155,31 +215,47 @@ bool Kernel::createProcess(const std::string& filename)
     std::ifstream file(filename, std::ios::binary);
     if (!file) return false;
 
+    // elf header
+    Elf32_Ehdr ehdr;
+    if (!file.read(reinterpret_cast<char*>(&ehdr), sizeof(ehdr))) return false;
+
+    // Verify Magic: 0x7F 'E' 'L' 'F'
+    if (ehdr.e_ident[EI_MAG0] != ELFMAG0 || ehdr.e_ident[EI_MAG1] != ELFMAG1 ||
+        ehdr.e_ident[EI_MAG2] != ELFMAG2 || ehdr.e_ident[EI_MAG3] != ELFMAG3)
+    {
+        LOG(LOADER, ERROR, "Not a valid ELF file: " + filename);
+        return false;
+    }
+
     // if already max processes, fail the creation
     if (this->processList.size() == MAX_PROCESS) return false;
 
     int newPid = this->processList.size() + 1;
     Process* process = new Process(newPid, filename);
 
-    Addr vaddr = MEMORY_BASE;
-    char buffer[PAGE_SIZE];
+    // set PC entry for that process
+    process->setPC(ehdr.e_entry);
 
-    while (file.read(buffer, 4096) || file.gcount() > 0)
+    // Parse Program Headers (Segments)
+    file.seekg(ehdr.e_phoff);
+
+    for (int i = 0; i < ehdr.e_phnum; ++i)
     {
-        STATS.incDiskReads();
-        STATS.incAllocatedFrames();
+        Elf32_Phdr phdr;
+        file.read(reinterpret_cast<char*>(&phdr), sizeof(phdr));
+        // only care about LOAD segments
+        if (phdr.p_type != PT_LOAD) continue;
 
-        size_t bytesRead = file.gcount();
+        Segment seg;
+        seg.vaddr = phdr.p_vaddr;
+        seg.memSize = phdr.p_memsz;
+        seg.fileSize = phdr.p_filesz;
+        seg.fileOffset = phdr.p_offset;
+        seg.flags = phdr.p_flags;
 
-        Addr paddr = this->pmm.allocateFrame();
+        process->getSegments().push_back(seg);
 
-        Addr vpn = vaddr >> 12;
-
-        (*process->getPageTable())[vpn] = (paddr & 0xFFFFF000) | 0x1;
-
-        // 3. Write data to RAM
-        for (size_t i = 0; i < bytesRead; i++) this->cpu.storePhysicalMemory(paddr + i, 1, static_cast<Word>(buffer[i]));
-        vaddr += PAGE_SIZE;
+        LOG(LOADER, INFO, "Segment: " + Utils::toHex(seg.vaddr) + " Size: " + std::to_string(seg.memSize) + " Flags: " + std::to_string(seg.flags));
     }
 
     this->processList.push_back(process);

@@ -4,6 +4,7 @@ rv32sysemu
 
 programs/*.bin
 programs/*.o
+programs/*.elf
 
 lib/*.o
 lib/*.bin

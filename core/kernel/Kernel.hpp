@@ -1,30 +1,28 @@
 #pragma once
-#include "CPU.hpp"
-#include "Exception.hpp"
-#include "PhysicalMemoryManager.hpp"
+#include "KernelContext.hpp"
+#include "Loader.hpp"
 #include "Process.hpp"
+#include "Scheduler.hpp"
+#include "SyscallHandler.hpp"
+#include "VirtualMemoryManager.hpp"
 
 class Kernel
 {
 public:
     Kernel();
-    ~Kernel();
+    ~Kernel() = default;
     void run();
-
     bool createProcess(const std::string& filename);
-    friend bool loadBinary(const std::string& filename, Kernel* kernel);
 
 private:
-    CPU cpu;
-    PhysicalMemoryManager pmm;
-    std::vector<Process*> processList;
-    int currentProcessIndex = -1;
+    void runFirstProcess();
 
 private:
-    void schedule();
-    void contextSwitch(Process* nextProc);
+    KernelContext ctx;
 
 private:
-    void handleSyscall(SyscallID syscallID);
-    void handlePageFault(Addr faultAddr);
+    Scheduler scheduler;
+    VirtualMemoryManager vmm;
+    SyscallHandler syscalls;
+    Loader loader;
 };

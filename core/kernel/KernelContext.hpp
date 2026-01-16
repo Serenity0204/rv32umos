@@ -5,6 +5,8 @@
 #include "Stats.hpp"
 #include <vector>
 
+using ProcessState = Process::ProcessState;
+
 struct KernelContext
 {
 public:

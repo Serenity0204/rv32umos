@@ -1,16 +1,16 @@
 #pragma once
 #include "KernelContext.hpp"
-#include "Logger.hpp"
 
 class Scheduler
 {
 public:
-    Scheduler(KernelContext* context) : ctx(context) {}
-    void schedule();
+    Scheduler(KernelContext* context);
+    void yield();
+    bool admitProcesses();
 
 private:
     void contextSwitch(std::size_t nextIndex);
-    void checkAllTerminated();
+    bool checkAllTerminated();
 
 private:
     KernelContext* ctx;

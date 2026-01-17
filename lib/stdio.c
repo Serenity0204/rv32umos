@@ -25,19 +25,19 @@ int getchar()
 
 int getline(char* buf, int max_len)
 {
-    int i = 0;
-    int c;
 
-    while (i < max_len - 1)
+    if (max_len <= 0) return 0;
+
+    // Request the full buffer size in ONE system call.
+    int bytes_read = read(STDIN, buf, max_len - 1);
+
+    if (bytes_read <= 0)
     {
-        c = getchar();
-
-        if (c == EOF) break;
-        buf[i] = (char)c;
-        i++;
-        if (c == '\n') break;
+        buf[0] = '\0';
+        return 0;
     }
-    buf[i] = '\0';
 
-    return i;
+    buf[bytes_read] = '\0';
+
+    return bytes_read;
 }

@@ -13,7 +13,7 @@ int main()
 
         if (len <= 0) break;
 
-        if (buffer[0] == 'e' && buffer[1] == 'x' && buffer[2] == 'i' && buffer[3] == 't')
+        if (buffer[0] == 'e' && buffer[1] == 'x' && buffer[2] == 'i' && buffer[3] == 't' && buffer[4] == '\n')
         {
             putstr("Bye!\n");
             break;

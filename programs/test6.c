@@ -18,7 +18,7 @@ void worker(void* arg)
     }
 
     putstr("   [Worker] Thread Finished.\n");
-    exit(0);
+    thread_exit(0);
 }
 
 int main()

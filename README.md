@@ -31,6 +31,8 @@ The system operates on a Sequential execution model with Interrupt Polling. This
   - `SYS_WRITE`: Handles output to stdout/stderr.
   - `SYS_READ`: Basic input handling from stdin.
   - `SYS_EXIT`: Manages process termination and exit codes.
+  - `SYS_THREAD_CREATE`: Creates a thread object.
+  - `SYS_THREAD_EXIT`: Exit the current thread.
 ## [Detailed Wiki](https://deepwiki.com/Serenity0204/rv32sysemu)
 
 ## Usage

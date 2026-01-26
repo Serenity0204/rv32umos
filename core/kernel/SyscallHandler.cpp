@@ -13,12 +13,12 @@ bool SyscallHandler::dispatch(SyscallID id)
 {
 
     STATS.incSyscalls();
-    bool processExited = false;
+    bool exited = false;
 
     switch (id)
     {
     case SyscallID::SYS_EXIT:
-        processExited = handleExit();
+        exited = handleExit();
         break;
     case SyscallID::SYS_WRITE:
         this->handleWrite();
@@ -29,13 +29,16 @@ bool SyscallHandler::dispatch(SyscallID id)
     case SyscallID::SYS_THREAD_CREATE:
         this->handleCreateThread();
         break;
+    case SyscallID::SYS_THREAD_EXIT:
+        this->handleExitThread();
+        break;
     default:
         LOG(SYSCALL, ERROR, "Unimplemented syscall id: " + std::to_string((int)id));
         this->ctx->cpu.halt();
         break;
     }
 
-    return processExited;
+    return exited;
 }
 
 void SyscallHandler::handleCreateThread()
@@ -66,7 +69,7 @@ void SyscallHandler::handleCreateThread()
     this->ctx->cpu.advancePC();
 }
 
-bool SyscallHandler::handleExit()
+bool SyscallHandler::handleExitThread()
 {
     Word exitCode = this->ctx->cpu.readReg(10);
     Thread* current = this->ctx->getCurrentThread();
@@ -80,6 +83,28 @@ bool SyscallHandler::handleExit()
     }
     this->ctx->cpu.halt();
     return false;
+}
+
+bool SyscallHandler::handleExit()
+{
+    Word exitCode = this->ctx->cpu.readReg(10);
+    Thread* current = this->ctx->getCurrentThread();
+
+    if (current == nullptr)
+    {
+        this->ctx->cpu.halt();
+        return false;
+    }
+
+    Process* proc = current->getProcess();
+
+    std::vector<Thread*>& threads = proc->getThreads();
+    for (Thread* t : threads)
+        t->setState(ThreadState::TERMINATED);
+
+    LOG(KERNEL, INFO, "Process " + std::to_string(proc->getPid()) + " (Group Exit) terminated with code " + std::to_string(exitCode));
+
+    return true;
 }
 
 void SyscallHandler::handleWrite()

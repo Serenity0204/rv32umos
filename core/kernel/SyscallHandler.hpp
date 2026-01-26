@@ -7,7 +7,7 @@ class SyscallHandler
 public:
     SyscallHandler(KernelContext* ctx);
 
-    // Returns true if the current process exited (requiring a schedule)
+    // Returns true if the current thread or process exited (requiring a schedule)
     bool dispatch(SyscallID id);
 
 private:
@@ -17,4 +17,5 @@ private:
     void handleWrite();
     void handleRead();
     void handleCreateThread();
+    bool handleExitThread();
 };

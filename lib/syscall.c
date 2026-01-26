@@ -23,3 +23,9 @@ int thread_create(void (*func)(void*), void* arg)
 {
     return syscall(SYS_THREAD_CREATE, (int)func, (int)arg);
 }
+
+void thread_exit(int status)
+{
+    syscall(SYS_THREAD_EXIT, status);
+    while (1);
+}

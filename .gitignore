@@ -1,5 +1,5 @@
 build/
-rv32sysemu
+rv32kernel
 .vscode/
 
 programs/*.bin

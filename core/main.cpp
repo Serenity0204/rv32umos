@@ -7,10 +7,9 @@
 
 int main(int argc, char* argv[])
 {
-    std::cout << "rv32sysemu entry:\n";
     if (argc < 2)
     {
-        std::cout << "Usage: ./rv32sysemu <bin_file>\n";
+        std::cout << "Usage: ./rv32kernel <bin_file>\n";
         return 1;
     }
 

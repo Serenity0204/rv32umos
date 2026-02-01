@@ -29,3 +29,8 @@ void thread_exit(int status)
     syscall(SYS_THREAD_EXIT, status);
     while (1);
 }
+
+int thread_join(int tid)
+{
+    return syscall(SYS_THREAD_JOIN, tid);
+}

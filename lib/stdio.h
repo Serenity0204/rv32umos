@@ -8,6 +8,7 @@
 
 void putchar(char c);
 void putstr(const char* s);
+void putint(int n);
 
 int getchar();
 int getline(char* buf, int max_len);

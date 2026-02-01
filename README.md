@@ -33,6 +33,7 @@ The system operates on a Sequential execution model with Interrupt Polling. This
   - `SYS_EXIT`: Manages process termination and exit codes.
   - `SYS_THREAD_CREATE`: Creates a thread object.
   - `SYS_THREAD_EXIT`: Exit the current thread.
+  - `SYS_THREAD_JOIN`: Join one thread with another thread
 ## [Detailed Wiki](https://deepwiki.com/Serenity0204/rv32sysemu)
 
 ## Usage
@@ -50,7 +51,7 @@ bash clean.sh
 ./rv32kernel programs/<your_file.bin>
 ```
 
-## Example Output
+## Example Output(Log)
 ```
 [LOADER   ] Segment: 0x0 Size: 952 Flags: 5
 [LOADER   ] Segment: 0x0 Size: 0 Flags: 6

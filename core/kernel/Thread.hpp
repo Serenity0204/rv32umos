@@ -21,14 +21,26 @@ class Thread
 private:
     struct TCB
     {
+        Thread* joiner;
+        bool hasBeenJoined;
         int tid;
+        int exitCode;
+
         ThreadState state;
         Addr pc;
         RegFile regs;
         Process* parent;
         Addr stackTop;
 
-        TCB(int id, Process* p, Addr entryPC, Addr stackPtr) : tid(id), state(ThreadState::NEW), pc(entryPC), parent(p), stackTop(stackPtr)
+        TCB(int id, Process* p, Addr entryPC, Addr stackPtr) : joiner(nullptr),
+                                                               hasBeenJoined(false),
+                                                               tid(id),
+                                                               exitCode(0),
+                                                               state(ThreadState::NEW),
+                                                               pc(entryPC),
+                                                               regs(),
+                                                               parent(p),
+                                                               stackTop(stackPtr)
         {
             this->regs.reset();
             this->regs.write(2, stackPtr);
@@ -49,6 +61,15 @@ public:
 
     inline RegFile& getRegs() { return this->tcb->regs; }
     inline Process* getProcess() const { return this->tcb->parent; }
+
+    inline Thread* getJoiner() const { return this->tcb->joiner; }
+    inline void setJoiner(Thread* t) { this->tcb->joiner = t; }
+
+    inline void setHasBeenJoined(bool status) { this->tcb->hasBeenJoined = status; }
+    inline bool getHasBeenJoined() const { return this->tcb->hasBeenJoined; }
+
+    inline void setExitCode(int code) { this->tcb->exitCode = code; }
+    inline int getExitCode() const { return this->tcb->exitCode; }
 
 private:
     TCB* tcb;

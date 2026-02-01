@@ -13,6 +13,36 @@ void putstr(const char* s)
     write(STDOUT, (void*)s, len);
 }
 
+void putint(int n)
+{
+    char buffer[12];
+    int idx = 12;
+    unsigned int u;
+
+    if (n == 0)
+    {
+        buffer[0] = '0';
+        write(STDOUT, buffer, 1);
+        return;
+    }
+
+    if (n < 0)
+        u = (unsigned int)(-(n + 1)) + 1;
+    else
+        u = (unsigned int)n;
+
+    while (u > 0)
+    {
+        buffer[--idx] = (char)('0' + (u % 10));
+        u /= 10;
+    }
+
+    if (n < 0)
+        buffer[--idx] = '-';
+
+    write(STDOUT, &buffer[idx], (unsigned int)(12 - idx));
+}
+
 int getchar()
 {
     char c;

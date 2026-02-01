@@ -65,11 +65,12 @@ void Scheduler::contextSwitch(std::size_t nextIndex)
     Thread* currentThread = this->ctx->getCurrentThread();
 
     // Save Current State (if valid)
-    if (currentThread != nullptr && currentThread->getState() == ThreadState::RUNNING)
+    if (currentThread != nullptr && currentThread->getState() != ThreadState::TERMINATED)
     {
-        currentThread->setState(ThreadState::READY);
         currentThread->getRegs() = this->ctx->cpu.getRegs();
         currentThread->setPC(this->ctx->cpu.getPC());
+
+        if (currentThread->getState() == ThreadState::RUNNING) currentThread->setState(ThreadState::READY);
     }
 
     this->ctx->cpu.getRegs() = nextThread->getRegs();

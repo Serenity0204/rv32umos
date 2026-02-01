@@ -13,6 +13,7 @@ public:
     ~Kernel() = default;
     void run();
     bool createProcess(const std::string& filename);
+    bool killProcess(int pid);
 
 private:
     KernelContext ctx;

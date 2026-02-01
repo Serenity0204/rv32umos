@@ -9,28 +9,30 @@
 
 SyscallHandler::SyscallHandler(KernelContext* context) : ctx(context) {}
 
-bool SyscallHandler::dispatch(SyscallID id)
+SyscallStatus SyscallHandler::dispatch(SyscallID id)
 {
-
     STATS.incSyscalls();
-    bool exited = false;
 
+    SyscallStatus status;
     switch (id)
     {
     case SyscallID::SYS_EXIT:
-        exited = handleExit();
+        handleExit(status);
         break;
     case SyscallID::SYS_WRITE:
-        this->handleWrite();
+        this->handleWrite(status);
         break;
     case SyscallID::SYS_READ:
-        this->handleRead();
+        this->handleRead(status);
         break;
     case SyscallID::SYS_THREAD_CREATE:
-        this->handleCreateThread();
+        this->handleThreadCreate(status);
         break;
     case SyscallID::SYS_THREAD_EXIT:
-        this->handleExitThread();
+        this->handleThreadExit(status);
+        break;
+    case SyscallID::SYS_THREAD_JOIN:
+        this->handleThreadJoin(status);
         break;
     default:
         LOG(SYSCALL, ERROR, "Unimplemented syscall id: " + std::to_string((int)id));
@@ -38,11 +40,119 @@ bool SyscallHandler::dispatch(SyscallID id)
         break;
     }
 
-    return exited;
+    return status;
 }
 
-void SyscallHandler::handleCreateThread()
+void SyscallHandler::handleThreadJoin(SyscallStatus& status)
 {
+    // reset status
+    status.needReschedule = false;
+    status.error = false;
+
+    int targetThreadTid = this->ctx->cpu.readReg(10);
+    Thread* current = this->ctx->getCurrentThread();
+    Process* process = current->getProcess();
+
+    Thread* targetThread = nullptr;
+
+    // see if the target exist in the first place
+    std::vector<Thread*>& threads = process->getThreads();
+    for (Thread* thread : threads)
+    {
+        if (thread->getTid() == targetThreadTid)
+        {
+            targetThread = thread;
+            break;
+        }
+    }
+
+    // no need to reschedule, if the target does not exist in the first place
+    if (targetThread == nullptr)
+    {
+        LOG(SYSCALL, ERROR, "Thread Join Failed: Target Thread ID does not exist " + std::to_string(targetThreadTid));
+        this->ctx->cpu.writeReg(10, -1);
+        this->ctx->cpu.advancePC();
+        return;
+    }
+
+    // cannot join itself
+    if (targetThread->getTid() == current->getTid())
+    {
+        LOG(SYSCALL, ERROR, "Thread Join Failed: Cannot join with yourself");
+        this->ctx->cpu.writeReg(10, -1);
+        this->ctx->cpu.advancePC();
+        return;
+    }
+
+    // has been joined
+    if (targetThread->getHasBeenJoined())
+    {
+        LOG(SYSCALL, ERROR, "Thread Join Failed: Target Thread with ID " + std::to_string(targetThreadTid) + " has been joined by other threads");
+        this->ctx->cpu.writeReg(10, -1);
+        this->ctx->cpu.advancePC();
+        return;
+    }
+
+    // update status
+    targetThread->setHasBeenJoined(true);
+
+    // target already dead, return success and continue
+    if (targetThread->getState() == ThreadState::TERMINATED)
+    {
+        this->ctx->cpu.writeReg(10, targetThread->getExitCode());
+        this->ctx->cpu.advancePC();
+        return;
+    }
+
+    // target still running, block the current thread
+    LOG(SYSCALL, INFO, "Thread " + std::to_string(current->getTid()) + " blocking for Thread " + std::to_string(targetThreadTid));
+
+    // set the id and block the current thread
+    targetThread->setJoiner(current);
+    current->setState(ThreadState::BLOCKED);
+    status.needReschedule = true;
+}
+
+void SyscallHandler::handleThreadExit(SyscallStatus& status)
+{
+    // reset status
+    status.needReschedule = false;
+    status.error = false;
+
+    Word exitCode = this->ctx->cpu.readReg(10);
+    Thread* current = this->ctx->getCurrentThread();
+
+    if (current != nullptr)
+    {
+        current->setState(ThreadState::TERMINATED);
+        current->setExitCode(exitCode);
+        Process* proc = current->getProcess();
+        LOG(KERNEL, INFO, "Thread " + std::to_string(current->getTid()) + " (PID " + std::to_string(proc->getPid()) + ")" + " exited code " + std::to_string(exitCode));
+
+        // check for joiner
+        Thread* joiner = current->getJoiner();
+        if (joiner != nullptr)
+        {
+            joiner->setState(ThreadState::READY);
+            // pass the exit code to joiner for their ecall
+            joiner->getRegs().write(10, exitCode);
+            // advance joiner PC
+            joiner->setPC(joiner->getPC() + 4);
+            LOG(SYSCALL, INFO, "Thread " + std::to_string(current->getTid()) + " waking up Joiner " + std::to_string(joiner->getTid()));
+        }
+        // Signal to schedule
+        status.needReschedule = true;
+        return;
+    }
+    this->ctx->cpu.halt();
+}
+
+void SyscallHandler::handleThreadCreate(SyscallStatus& status)
+{
+    // reset status
+    status.needReschedule = false;
+    status.error = false;
+
     Word funcPtr = this->ctx->cpu.readReg(10);
     Word arg = this->ctx->cpu.readReg(11);
 
@@ -69,31 +179,19 @@ void SyscallHandler::handleCreateThread()
     this->ctx->cpu.advancePC();
 }
 
-bool SyscallHandler::handleExitThread()
+void SyscallHandler::handleExit(SyscallStatus& status)
 {
-    Word exitCode = this->ctx->cpu.readReg(10);
-    Thread* current = this->ctx->getCurrentThread();
+    // reset status
+    status.needReschedule = false;
+    status.error = false;
 
-    if (current != nullptr)
-    {
-        current->setState(ThreadState::TERMINATED);
-        Process* proc = current->getProcess();
-        LOG(KERNEL, INFO, "Thread " + std::to_string(current->getTid()) + " (PID " + std::to_string(proc->getPid()) + ")" + " exited code " + std::to_string(exitCode));
-        return true; // Signal to schedule
-    }
-    this->ctx->cpu.halt();
-    return false;
-}
-
-bool SyscallHandler::handleExit()
-{
     Word exitCode = this->ctx->cpu.readReg(10);
     Thread* current = this->ctx->getCurrentThread();
 
     if (current == nullptr)
     {
         this->ctx->cpu.halt();
-        return false;
+        return;
     }
 
     Process* proc = current->getProcess();
@@ -104,11 +202,15 @@ bool SyscallHandler::handleExit()
 
     LOG(KERNEL, INFO, "Process " + std::to_string(proc->getPid()) + " (Group Exit) terminated with code " + std::to_string(exitCode));
 
-    return true;
+    status.needReschedule = true;
 }
 
-void SyscallHandler::handleWrite()
+void SyscallHandler::handleWrite(SyscallStatus& status)
 {
+    // reset status
+    status.needReschedule = false;
+    status.error = false;
+
     Thread* currentThread = this->ctx->getCurrentThread();
     if (currentThread == nullptr) return;
 
@@ -147,8 +249,12 @@ void SyscallHandler::handleWrite()
     return;
 }
 
-void SyscallHandler::handleRead()
+void SyscallHandler::handleRead(SyscallStatus& status)
 {
+    // reset status
+    status.needReschedule = false;
+    status.error = false;
+
     Thread* currentThread = this->ctx->getCurrentThread();
     if (currentThread == nullptr) return;
 

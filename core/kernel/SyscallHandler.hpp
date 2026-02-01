@@ -6,16 +6,18 @@ class SyscallHandler
 {
 public:
     SyscallHandler(KernelContext* ctx);
-
-    // Returns true if the current thread or process exited (requiring a schedule)
-    bool dispatch(SyscallID id);
+    SyscallStatus dispatch(SyscallID id);
 
 private:
     KernelContext* ctx;
 
-    bool handleExit();
-    void handleWrite();
-    void handleRead();
-    void handleCreateThread();
-    bool handleExitThread();
+    // process related
+    void handleExit(SyscallStatus& status);
+    void handleWrite(SyscallStatus& status);
+    void handleRead(SyscallStatus& status);
+
+    // threads related
+    void handleThreadCreate(SyscallStatus& status);
+    void handleThreadExit(SyscallStatus& status);
+    void handleThreadJoin(SyscallStatus& status);
 };

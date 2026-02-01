@@ -26,7 +26,7 @@ bool Loader::loadELF(const std::string& filename)
     // if already max processes, fail the creation
     if (this->ctx->processList.size() == MAX_PROCESS) return false;
 
-    int newPid = this->ctx->processList.size() + 1;
+    int newPid = this->ctx->processList.size();
     Process* process = new Process(newPid, filename);
 
     // Parse Program Headers (Segments)

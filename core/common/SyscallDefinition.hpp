@@ -2,6 +2,12 @@
 #include <string>
 #include <unordered_map>
 
+struct SyscallStatus
+{
+    bool needReschedule = false;
+    bool error = false;
+};
+
 enum class SyscallID : int
 {
     SYS_EXIT = 0,
@@ -9,6 +15,7 @@ enum class SyscallID : int
     SYS_READ = 2,
     SYS_THREAD_CREATE = 3,
     SYS_THREAD_EXIT = 4,
+    SYS_THREAD_JOIN = 5,
     SYS_UNKNOWN = -1,
 };
 
@@ -18,4 +25,5 @@ inline const std::unordered_map<SyscallID, std::string> sysCallNameMap = {
     {SyscallID::SYS_READ, "read syscall"},
     {SyscallID::SYS_THREAD_CREATE, "create thread syscall"},
     {SyscallID::SYS_THREAD_EXIT, "exit thread syscall"},
+    {SyscallID::SYS_THREAD_JOIN, "join thread syscall"},
 };

@@ -34,7 +34,18 @@ The system operates on a Sequential execution model with Interrupt Polling. This
   - `SYS_THREAD_CREATE`: Creates a thread object.
   - `SYS_THREAD_EXIT`: Exit the current thread.
   - `SYS_THREAD_JOIN`: Join one thread with another thread
+  - `SYS_MUTEX_CREATE`: Create a mutex lock for this process
+  - `SYS_MUTEX_LOCK`: Try to acquire the lock
+  - `SYS_MUTEX_UNLOCK`: Try to release the lock
 ## [Detailed Wiki](https://deepwiki.com/Serenity0204/rv32sysemu)
+
+## Toolchain Requirements
+1. Install the riscv toolchain
+  ```bash
+  gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
+  ```
+2. CMake
+3. g++
 
 ## Usage
 

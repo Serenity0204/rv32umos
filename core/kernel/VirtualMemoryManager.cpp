@@ -19,6 +19,14 @@ bool VirtualMemoryManager::handlePageFault(Addr faultAddr)
 
     Process* process = currentThread->getProcess();
     Addr vpn = faultAddr >> 12;
+    PTE& pte = (*process->getPageTable())[vpn];
+
+    // faulting when the pte clearly still exists, it's a permission error
+    if (pte.valid)
+    {
+        LOG(KERNEL, ERROR, "Protection Fault: Thread " + std::to_string(currentThread->getTid()) + " tried to access protected " + Utils::toHex(faultAddr));
+        return false;
+    }
 
     // if it's under stack limit, allocate one physical page and set the page table entry
     if (this->handleStackGrowth(process, faultAddr, vpn)) return true;
@@ -26,14 +34,8 @@ bool VirtualMemoryManager::handlePageFault(Addr faultAddr)
     // check for segments for lazy loading
     if (this->handleLazyLoading(process, faultAddr, vpn)) return true;
 
-    // If it's not stack, it's a real crash (SegFault)
-    LOG(KERNEL, ERROR, "Segmentation Fault: Invalid access at " + Utils::toHex(faultAddr));
-
-    // terminate all threads related to this segfault process
-    std::vector<Thread*>& allThreads = process->getThreads();
-    for (Thread* thread : allThreads)
-        thread->setState(ThreadState::TERMINATED);
-
+    // If it's not stack, it's a real crash (SegFault), return false to let the handler handle it
+    LOG(KERNEL, ERROR, "Thread " + std::to_string(currentThread->getTid()) + " (PID " + std::to_string(process->getPid()) + ")" + " causes Segmentation Fault: Invalid access at " + Utils::toHex(faultAddr));
     return false;
 }
 

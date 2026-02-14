@@ -1,9 +1,52 @@
-#include "Bus.hpp"
-#include "CPU.hpp"
 #include "Kernel.hpp"
-#include "Memory.hpp"
+#include "Logger.hpp"
 #include <iostream>
 #include <string>
+
+#ifdef __EMSCRIPTEN__
+#include <emscripten/bind.h>
+using namespace emscripten;
+
+void clearLogsWrapper()
+{
+    CLEAR_LOGS();
+}
+void resetStatsWrapper()
+{
+    STATS.reset();
+}
+
+void flushLogsWrapper()
+{
+    SHOW_LOGS();
+}
+
+void printStatsWrapper()
+{
+    STATS.printSummary();
+}
+EMSCRIPTEN_BINDINGS(kernel_module)
+{
+    function("flushLogs", &flushLogsWrapper);
+    function("printStats", &printStatsWrapper);
+    function("clearLogs", &clearLogsWrapper);
+    function("resetStats", &resetStatsWrapper);
+
+    class_<Kernel>("Kernel")
+        .constructor<>()
+        .function("createProcess", &Kernel::createProcess)
+        .function("killProcess", &Kernel::killProcess)
+        .function("init", &Kernel::init)
+        .function("step", &Kernel::step)
+        .function("isRunning", &Kernel::isRunning);
+}
+
+int main()
+{
+    return 0;
+}
+
+#else
 
 int main(int argc, char* argv[])
 {
@@ -23,7 +66,16 @@ int main(int argc, char* argv[])
         std::cout << "Failed to create process.\n";
         return 1;
     }
-    kernel.run();
 
+    kernel.init();
+
+    while (kernel.isRunning())
+        kernel.step();
+
+    SHOW_LOGS();
+
+    STATS.printSummary();
     return 0;
 }
+
+#endif

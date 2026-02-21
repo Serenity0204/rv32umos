@@ -52,7 +52,7 @@ int main(int argc, char* argv[])
 {
     if (argc < 2)
     {
-        std::cout << "Usage: ./rv32umos <elf_file>\n";
+        std::cout << "Usage: ./rv32simOS <elf_file>\n";
         return 1;
     }
 

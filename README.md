@@ -1,8 +1,8 @@
-# rv32umos
-> A RISC-V OS kernel running on a custom RISC-V architectural simulator.
+# rv32simOS
+> **rv32simOS** is an OS kernel running on a custom RISC-V architectural simulator.
 
 ## Overview
-rv32umos is an OS kernel that runs on a custom 32-bit RISC-V architectural simulator in C++. It features virtual memory with demand paging and swapping, preemptive multi-thread scheduling, synchronization primitives, a virtual file system, and a custom syscall ABI. It serves an educational purpose by bridging the gap between hardware emulation and OS theory.
+**rv32simOS** is an OS kernel that runs on a custom 32-bit RISC-V architectural simulator using High-Level Emulation (HLE) written in C++. It features virtual memory with demand paging and swapping, preemptive multi-thread scheduling, synchronization primitives, a virtual file system, and a custom syscall ABI. It serves an educational purpose by bridging the gap between hardware emulation and OS theory.
 
 ## Architecture
 The system operates on a Sequential execution model with Interrupt Polling. This ensures deterministic behavior and allows for precise debugging of race conditions and scheduling logic.

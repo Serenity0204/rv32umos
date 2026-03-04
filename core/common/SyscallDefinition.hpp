@@ -22,6 +22,7 @@ enum class SyscallID : int
     SYS_OPEN = 9,
     SYS_CLOSE = 10,
     SYS_CREATE = 11,
+    SYS_SBRK = 12,
     SYS_UNKNOWN = -1,
 };
 
@@ -38,4 +39,5 @@ inline const std::unordered_map<SyscallID, std::string> sysCallNameMap = {
     {SyscallID::SYS_OPEN, "open yscall"},
     {SyscallID::SYS_CLOSE, "close syscall"},
     {SyscallID::SYS_CREATE, "create syscall"},
+    {SyscallID::SYS_SBRK, "sbrk syscall"},
 };

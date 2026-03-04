@@ -18,6 +18,7 @@ private:
     void handleOpen(SyscallStatus& status);
     void handleClose(SyscallStatus& status);
     void handleCreate(SyscallStatus& status);
+    void handleSbrk(SyscallStatus& status);
 
     // threads related
     void handleThreadCreate(SyscallStatus& status);

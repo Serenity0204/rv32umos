@@ -57,6 +57,8 @@ bool VirtualMemoryManager::handlePageFault(Addr faultAddr)
     // check for segments for lazy loading
     if (this->handleLazyLoading(process, faultAddr, vpn)) return true;
 
+    // Check if it's a valid heap access
+    if (this->handleHeapGrowth(process, faultAddr, vpn)) return true;
     // If it's not stack, it's a real crash (SegFault), return false to let the handler handle it
     LOG(KERNEL, ERROR, "Thread " + std::to_string(currentThread->getTid()) + " (PID " + std::to_string(process->getPid()) + ")" + " causes Segmentation Fault: Invalid access at " + Utils::toHex(faultAddr));
     return false;
@@ -90,6 +92,28 @@ bool VirtualMemoryManager::handleStackGrowth(Process* proc, Addr faultAddr, Addr
     }
 
     LOG(MMU, WARNING, "Stack Overflow / Guard Page Hit at " + Utils::toHex(faultAddr));
+    return false;
+}
+
+bool VirtualMemoryManager::handleHeapGrowth(Process* proc, Addr faultAddr, Addr vpn)
+{
+    if (faultAddr >= HEAP_START && faultAddr < proc->getProgramBreak())
+    {
+        this->ctx->timer.tick(MEMORY_ALLOCATION_TIME);
+        Addr paddr = this->allocateFrame(proc->getPid(), vpn);
+
+        // fill the new heap frame with pure zeros to prevent security leaks
+        for (Addr i = 0; i < KERNEL_PAGE_SIZE; i++)
+            this->ctx->cpu.storePhysicalMemory(paddr + i, 1, 0);
+        PTE& pte = (*proc->getPageTable())[vpn];
+        pte.ppn = paddr >> 12;
+        pte.valid = true;
+        pte.canRead = true;
+        pte.canWrite = true;
+        pte.referenced = true;
+        LOG(MMU, DEBUG, "Heap Page Allocated: " + Utils::toHex(faultAddr));
+        return true;
+    }
     return false;
 }
 

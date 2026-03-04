@@ -17,6 +17,7 @@
 #define SYS_OPEN 9
 #define SYS_CLOSE 10
 #define SYS_CREATE 11
+#define SYS_SBRK 12
 
 // mutex id
 typedef int mutex_t;
@@ -39,4 +40,8 @@ int open(const char* filename);
 int close(int fd);
 int create(const char* filename, int sizeBytes);
 
+// heap memory related
+void* sbrk(int increment);
+void* malloc(int size);
+void free(void*);
 #endif

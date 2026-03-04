@@ -69,3 +69,22 @@ int create(const char* filename, int sizeBytes)
     if (sizeBytes <= 0) return -1;
     return syscall(SYS_CREATE, (int)filename, sizeBytes);
 }
+
+void* sbrk(int increment)
+{
+    return (void*)syscall(SYS_SBRK, increment);
+}
+
+void* malloc(int size)
+{
+    if (size <= 0) return NULL;
+
+    // align to 8 bytes for now
+    size = (size + 7) & ~7;
+    void* ptr = sbrk(size);
+    return ((int)ptr == -1) ? NULL : ptr;
+}
+
+void free(void*)
+{
+}

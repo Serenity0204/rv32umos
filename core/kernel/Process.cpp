@@ -99,3 +99,13 @@ bool Process::closeFileHandle(int fd)
     this->pcb->fdTable[fd] = nullptr;
     return true;
 }
+
+Addr Process::sbrk(int increment)
+{
+    Addr oldBreak = this->pcb->programBreak;
+    Addr newBreak = this->pcb->programBreak + increment;
+
+    if (newBreak < HEAP_START || newBreak > HEAP_MAX_LIMIT) return 0;
+    this->pcb->programBreak = newBreak;
+    return oldBreak;
+}

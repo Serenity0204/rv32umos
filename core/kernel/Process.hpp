@@ -28,13 +28,14 @@ private:
         std::vector<Thread*> threads;
         std::vector<Mutex*> mutexList;
         std::vector<FileHandleInterface*> fdTable;
-
+        Addr programBreak;
         Addr nextStackBase;
 
         PCB(int id, std::string n) : pid(id), name(n)
         {
             this->pageTable = new PageTable();
             this->nextStackBase = STACK_TOP;
+            this->programBreak = HEAP_START;
 
             this->fdTable.resize(FD_TABLE_SIZE);
             this->fdTable[0] = new ConsoleHandle(FileDescriptor::STDIN);
@@ -89,6 +90,11 @@ public:
     int addFileHandle(FileHandleInterface* handle);
     FileHandleInterface* getFileHandle(int fd);
     bool closeFileHandle(int fd);
+
+public:
+    // heap related
+    Addr sbrk(int increment);
+    inline Addr getProgramBreak() const { return this->pcb->programBreak; }
 
 private:
     PCB* pcb;

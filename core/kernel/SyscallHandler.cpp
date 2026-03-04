@@ -53,6 +53,9 @@ SyscallStatus SyscallHandler::dispatch(SyscallID id)
     case SyscallID::SYS_CREATE:
         this->handleCreate(status);
         break;
+    case SyscallID::SYS_SBRK:
+        this->handleSbrk(status);
+        break;
     default:
         LOG(SYSCALL, ERROR, "Unimplemented syscall id: " + std::to_string((int)id));
         this->ctx->cpu.halt();
@@ -405,6 +408,30 @@ void SyscallHandler::handleCreate(SyscallStatus& status)
 
     LOG(SYSCALL, INFO, "Created file: " + filename + " (Size: " + std::to_string(size) + ")");
     this->ctx->cpu.writeReg(10, 0);
+    this->ctx->cpu.advancePC();
+}
+
+void SyscallHandler::handleSbrk(SyscallStatus& status)
+{
+    // reset status
+    status.needReschedule = false;
+    status.error = false;
+
+    int increment = static_cast<int>(this->ctx->cpu.readReg(10));
+    Process* current = this->ctx->getCurrentThread()->getProcess();
+    Addr oldBreak = current->sbrk(increment);
+
+    // sbrk failed
+    if (oldBreak == 0)
+    {
+        LOG(SYSCALL, ERROR, "Sbrk failed: Out of Heap Memory");
+        this->ctx->cpu.writeReg(10, -1);
+        this->ctx->cpu.advancePC();
+        return;
+    }
+
+    LOG(SYSCALL, DEBUG, "Sbrk successful. New Break: " + Utils::toHex(current->getProgramBreak()));
+    this->ctx->cpu.writeReg(10, oldBreak);
     this->ctx->cpu.advancePC();
 }
 

@@ -3,30 +3,42 @@
 #include <cstdint>
 #include <iostream>
 
-// Memory
-const Addr MEMORY_BASE = 0x00000000;
-// 128MB
-const Addr MEMORY_SIZE = 1024 * 1024 * 128;
+// Max process
+const int MAX_PROCESS = 8;
+const int MAX_THREADS = 5;
 
 // 1kb
 const Addr KERNEL_PAGE_SIZE = 4096;
 
-// 0x08000000
-const Addr STACK_TOP = MEMORY_BASE + MEMORY_SIZE;
-
-// Main Thread gets 8MB
-const Addr MAIN_STACK_SIZE = 8 * 1024 * 1024;
-
-// Secondary Threads get 2MB
-const Addr THREAD_STACK_SIZE = 2 * 1024 * 1024;
-
 // Safety gap between stacks (4096)
 const Addr GUARD_PAGE_SIZE = KERNEL_PAGE_SIZE;
 
-// The absolute lowest address any stack can reach (32MB from top)
-const Addr STACK_REGION_BOTTOM = STACK_TOP - (32 * 1024 * 1024);
+// Currently 64 KB
+const std::size_t PHYSICAL_RAM_KB = 64;
+const Addr MEMORY_SIZE = PHYSICAL_RAM_KB * 1024;
+const Addr MEMORY_BASE = 0x00000000;
 
-const int MAX_PROCESS = 8;
+// Currently 64 MB Virtual Space
+const std::size_t VIRTUAL_RAM_MB = 64;
+const Addr VIRTUAL_MEMORY_SIZE = VIRTUAL_RAM_MB * 1024 * 1024;
+
+// ============================================================================
+// STACK LAYOUT
+// ============================================================================
+// Stack 32 mb, grows top to down
+const Addr STACK_TOP = VIRTUAL_MEMORY_SIZE;
+const Addr STACK_REGION_BOTTOM = VIRTUAL_MEMORY_SIZE / 2;
+
+// Main Thread gets fixed 25%, what child gets depending on the num of threads
+const Addr MAIN_STACK_SIZE = VIRTUAL_MEMORY_SIZE / 4;
+const Addr THREAD_STACK_SIZE = ((VIRTUAL_MEMORY_SIZE / 4) / (MAX_THREADS - 1)) - GUARD_PAGE_SIZE;
+
+// ============================================================================
+// HEAP LAYOUT
+// ============================================================================
+// First 16mb is elf, heap start at 16mb, grows upward till 32mb
+const Addr HEAP_START = VIRTUAL_MEMORY_SIZE / 4;
+const Addr HEAP_MAX_LIMIT = STACK_REGION_BOTTOM;
 
 // for context switch
 const int TIME_QUANTUM = 1000;
@@ -41,7 +53,8 @@ const std::size_t DISK_IO_TIME = 5000;
 
 // for disk
 const std::size_t BLOCK_SIZE = 4096;
-const std::size_t NUM_BLOCKS = 1024;
+const std::size_t NUM_DISK_BLOCKS = 4096;
+const std::size_t NUM_SWAP_BLOCKS = 2048;
 
 // fd table size
 const std::size_t FD_TABLE_SIZE = 1024;

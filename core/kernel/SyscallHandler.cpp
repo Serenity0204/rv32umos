@@ -1,5 +1,7 @@
 #include "SyscallHandler.hpp"
 #include "Common.hpp"
+#include "Kernel.hpp"
+#include "KernelInstance.hpp"
 #include "Logger.hpp"
 #include "Stats.hpp"
 #include "Utils.hpp"
@@ -7,15 +9,9 @@
 #include <unistd.h>
 #include <vector>
 
-SyscallHandler::SyscallHandler(SystemContext* context, StorageContext* storage)
-    : systemCtx(context), storageCtx(storage)
-{
-}
-
 SyscallStatus SyscallHandler::dispatch(SyscallID id)
 {
     STATS.incSyscalls();
-    this->systemCtx->timer.tick(SYSCALL_BASE_TIME);
 
     SyscallStatus status;
     switch (id)
@@ -61,7 +57,7 @@ SyscallStatus SyscallHandler::dispatch(SyscallID id)
         break;
     default:
         LOG(SYSCALL, ERROR, "Unimplemented syscall id: " + std::to_string((int)id));
-        this->systemCtx->cpu.halt();
+        kernel.systemCtx->cpu.halt();
         break;
     }
 
@@ -74,8 +70,8 @@ void SyscallHandler::handleThreadJoin(SyscallStatus& status)
     status.needReschedule = false;
     status.error = false;
 
-    int targetThreadTid = this->systemCtx->cpu.readReg(10);
-    Thread* current = this->systemCtx->getCurrentThread();
+    int targetThreadTid = kernel.systemCtx->cpu.readReg(10);
+    Thread* current = kernel.systemCtx->getCurrentThread();
     Process* process = current->getProcess();
 
     Thread* targetThread = nullptr;
@@ -95,8 +91,8 @@ void SyscallHandler::handleThreadJoin(SyscallStatus& status)
     if (targetThread == nullptr)
     {
         LOG(SYSCALL, ERROR, "Thread Join Failed: Target Thread ID does not exist " + std::to_string(targetThreadTid));
-        this->systemCtx->cpu.writeReg(10, -1);
-        this->systemCtx->cpu.advancePC();
+        kernel.systemCtx->cpu.writeReg(10, -1);
+        kernel.systemCtx->cpu.advancePC();
         return;
     }
 
@@ -104,8 +100,8 @@ void SyscallHandler::handleThreadJoin(SyscallStatus& status)
     if (targetThread->getTid() == current->getTid())
     {
         LOG(SYSCALL, ERROR, "Thread Join Failed: Cannot join with yourself");
-        this->systemCtx->cpu.writeReg(10, -1);
-        this->systemCtx->cpu.advancePC();
+        kernel.systemCtx->cpu.writeReg(10, -1);
+        kernel.systemCtx->cpu.advancePC();
         return;
     }
 
@@ -113,8 +109,8 @@ void SyscallHandler::handleThreadJoin(SyscallStatus& status)
     if (targetThread->getHasBeenJoined())
     {
         LOG(SYSCALL, ERROR, "Thread Join Failed: Target Thread with ID " + std::to_string(targetThreadTid) + " has been joined by other threads");
-        this->systemCtx->cpu.writeReg(10, -1);
-        this->systemCtx->cpu.advancePC();
+        kernel.systemCtx->cpu.writeReg(10, -1);
+        kernel.systemCtx->cpu.advancePC();
         return;
     }
 
@@ -124,8 +120,8 @@ void SyscallHandler::handleThreadJoin(SyscallStatus& status)
     // target already dead, return success and continue
     if (targetThread->getState() == ThreadState::TERMINATED)
     {
-        this->systemCtx->cpu.writeReg(10, targetThread->getExitCode());
-        this->systemCtx->cpu.advancePC();
+        kernel.systemCtx->cpu.writeReg(10, targetThread->getExitCode());
+        kernel.systemCtx->cpu.advancePC();
         return;
     }
 
@@ -144,8 +140,8 @@ void SyscallHandler::handleThreadExit(SyscallStatus& status)
     status.needReschedule = false;
     status.error = false;
 
-    Word exitCode = this->systemCtx->cpu.readReg(10);
-    Thread* current = this->systemCtx->getCurrentThread();
+    Word exitCode = kernel.systemCtx->cpu.readReg(10);
+    Thread* current = kernel.systemCtx->getCurrentThread();
 
     if (current != nullptr)
     {
@@ -169,7 +165,7 @@ void SyscallHandler::handleThreadExit(SyscallStatus& status)
         status.needReschedule = true;
         return;
     }
-    this->systemCtx->cpu.halt();
+    kernel.systemCtx->cpu.halt();
 }
 
 void SyscallHandler::handleThreadCreate(SyscallStatus& status)
@@ -178,10 +174,10 @@ void SyscallHandler::handleThreadCreate(SyscallStatus& status)
     status.needReschedule = false;
     status.error = false;
 
-    Word funcPtr = this->systemCtx->cpu.readReg(10);
-    Word arg = this->systemCtx->cpu.readReg(11);
+    Word funcPtr = kernel.systemCtx->cpu.readReg(10);
+    Word arg = kernel.systemCtx->cpu.readReg(11);
 
-    Thread* current = this->systemCtx->getCurrentThread();
+    Thread* current = kernel.systemCtx->getCurrentThread();
     if (current == nullptr) return;
 
     Process* proc = current->getProcess();
@@ -190,18 +186,18 @@ void SyscallHandler::handleThreadCreate(SyscallStatus& status)
     {
         LOG(SYSCALL, ERROR, "Thread Creation Failed");
         // Return -1 to user
-        this->systemCtx->cpu.writeReg(10, -1);
-        this->systemCtx->cpu.advancePC();
+        kernel.systemCtx->cpu.writeReg(10, -1);
+        kernel.systemCtx->cpu.advancePC();
         return;
     }
-
+    newThread->setupHostContext(reinterpret_cast<void (*)()>(&Kernel::runThread));
     newThread->setState(ThreadState::READY);
-    this->systemCtx->activeThreads.push_back(newThread);
+    kernel.systemCtx->activeThreads.push_back(newThread);
 
     LOG(SYSCALL, INFO, "Created Thread " + std::to_string(newThread->getTid()) + " (PID " + std::to_string(proc->getPid()) + ")");
 
-    this->systemCtx->cpu.writeReg(10, newThread->getTid());
-    this->systemCtx->cpu.advancePC();
+    kernel.systemCtx->cpu.writeReg(10, newThread->getTid());
+    kernel.systemCtx->cpu.advancePC();
 }
 
 void SyscallHandler::handleExit(SyscallStatus& status)
@@ -210,12 +206,12 @@ void SyscallHandler::handleExit(SyscallStatus& status)
     status.needReschedule = false;
     status.error = false;
 
-    Word exitCode = this->systemCtx->cpu.readReg(10);
-    Thread* current = this->systemCtx->getCurrentThread();
+    Word exitCode = kernel.systemCtx->cpu.readReg(10);
+    Thread* current = kernel.systemCtx->getCurrentThread();
 
     if (current == nullptr)
     {
-        this->systemCtx->cpu.halt();
+        kernel.systemCtx->cpu.halt();
         return;
     }
 
@@ -236,18 +232,15 @@ void SyscallHandler::handleWrite(SyscallStatus& status)
     status.needReschedule = false;
     status.error = false;
 
-    Thread* currentThread = this->systemCtx->getCurrentThread();
+    Thread* currentThread = kernel.systemCtx->getCurrentThread();
     if (currentThread == nullptr) return;
 
     Process* current = currentThread->getProcess();
     LOG(SYSCALL, DEBUG, "Write called by PID " + std::to_string(current->getPid()));
 
-    Word rawFD = this->systemCtx->cpu.readReg(10);
-    Word addr = this->systemCtx->cpu.readReg(11);
-    Word count = this->systemCtx->cpu.readReg(12);
-
-    // charge for extra cost
-    this->systemCtx->timer.tick(count * 2);
+    Word rawFD = kernel.systemCtx->cpu.readReg(10);
+    Word addr = kernel.systemCtx->cpu.readReg(11);
+    Word count = kernel.systemCtx->cpu.readReg(12);
 
     // get file handle
     int fd = static_cast<int>(rawFD);
@@ -255,24 +248,21 @@ void SyscallHandler::handleWrite(SyscallStatus& status)
     // if not valid
     if (handle == nullptr)
     {
-        this->systemCtx->cpu.writeReg(10, -1);
-        this->systemCtx->cpu.advancePC();
+        kernel.systemCtx->cpu.writeReg(10, -1);
+        kernel.systemCtx->cpu.advancePC();
         return;
     }
-
-    // charge for file io cost
-    if (handle->type() == FileHandleInterface::Type::DiskFile) this->systemCtx->timer.tick(DISK_IO_TIME);
 
     std::vector<Byte> buffer(count);
     for (Word i = 0; i < count; ++i)
     {
-        char c = this->systemCtx->cpu.loadVirtualMemory(addr + static_cast<Addr>(i), 1);
+        char c = kernel.systemCtx->cpu.loadVirtualMemory(addr + static_cast<Addr>(i), 1);
         buffer[i] = c;
     }
 
     int written = handle->write(buffer, count);
-    this->systemCtx->cpu.writeReg(10, written);
-    this->systemCtx->cpu.advancePC();
+    kernel.systemCtx->cpu.writeReg(10, written);
+    kernel.systemCtx->cpu.advancePC();
     return;
 }
 
@@ -282,18 +272,16 @@ void SyscallHandler::handleRead(SyscallStatus& status)
     status.needReschedule = false;
     status.error = false;
 
-    Thread* currentThread = this->systemCtx->getCurrentThread();
+    Thread* currentThread = kernel.systemCtx->getCurrentThread();
     if (currentThread == nullptr) return;
 
     Process* current = currentThread->getProcess();
 
     LOG(SYSCALL, DEBUG, "Read called by PID " + std::to_string(current->getPid()));
 
-    Word rawFD = this->systemCtx->cpu.readReg(10);
-    Word addr = this->systemCtx->cpu.readReg(11);
-    Word count = this->systemCtx->cpu.readReg(12);
-    // charge for extra cost
-    this->systemCtx->timer.tick(count * 2);
+    Word rawFD = kernel.systemCtx->cpu.readReg(10);
+    Word addr = kernel.systemCtx->cpu.readReg(11);
+    Word count = kernel.systemCtx->cpu.readReg(12);
 
     // get file handle
     int fd = static_cast<int>(rawFD);
@@ -301,12 +289,10 @@ void SyscallHandler::handleRead(SyscallStatus& status)
     // if not valid
     if (handle == nullptr)
     {
-        this->systemCtx->cpu.writeReg(10, -1);
-        this->systemCtx->cpu.advancePC();
+        kernel.systemCtx->cpu.writeReg(10, -1);
+        kernel.systemCtx->cpu.advancePC();
         return;
     }
-    // charge for file io cost
-    if (handle->type() == FileHandleInterface::Type::DiskFile) this->systemCtx->timer.tick(DISK_IO_TIME);
 
     std::vector<Byte> buffer(count);
     int bytesRead = handle->read(buffer, count);
@@ -317,11 +303,11 @@ void SyscallHandler::handleRead(SyscallStatus& status)
         {
             char rawChar = buffer[i];
             Byte byte = static_cast<uint8_t>(rawChar);
-            this->systemCtx->cpu.storeVirtualMemory(addr + static_cast<Addr>(i), 1, static_cast<Word>(byte));
+            kernel.systemCtx->cpu.storeVirtualMemory(addr + static_cast<Addr>(i), 1, static_cast<Word>(byte));
         }
     }
-    this->systemCtx->cpu.writeReg(10, bytesRead);
-    this->systemCtx->cpu.advancePC();
+    kernel.systemCtx->cpu.writeReg(10, bytesRead);
+    kernel.systemCtx->cpu.advancePC();
 }
 
 void SyscallHandler::handleOpen(SyscallStatus& status)
@@ -329,55 +315,55 @@ void SyscallHandler::handleOpen(SyscallStatus& status)
     status.needReschedule = false;
     status.error = false;
 
-    Word pathAddr = this->systemCtx->cpu.readReg(10);
+    Word pathAddr = kernel.systemCtx->cpu.readReg(10);
 
     std::string filename;
     // read virtual memory string
     std::size_t offset = 0;
     while (true)
     {
-        char c = static_cast<char>(this->systemCtx->cpu.loadVirtualMemory(pathAddr + offset, 1));
+        char c = static_cast<char>(kernel.systemCtx->cpu.loadVirtualMemory(pathAddr + offset, 1));
         if (c == 0) break;
         filename += c;
         ++offset;
         if (offset > MAX_FILE_NAME_LENGTH) break;
     }
 
-    FileHandleInterface* handle = this->storageCtx->vfs->open(filename);
+    FileHandleInterface* handle = kernel.storageCtx->vfs->open(filename);
     if (handle == nullptr)
     {
-        this->systemCtx->cpu.writeReg(10, -1);
-        this->systemCtx->cpu.advancePC();
+        kernel.systemCtx->cpu.writeReg(10, -1);
+        kernel.systemCtx->cpu.advancePC();
         return;
     }
 
     // file exists
-    Process* current = this->systemCtx->getCurrentThread()->getProcess();
+    Process* current = kernel.systemCtx->getCurrentThread()->getProcess();
     int fd = current->addFileHandle(handle);
     LOG(SYSCALL, INFO, "Opened file: " + filename + " (FD " + std::to_string(fd) + ")");
 
     if (fd == -1)
     {
-        this->systemCtx->cpu.writeReg(10, -1);
-        this->systemCtx->cpu.advancePC();
+        kernel.systemCtx->cpu.writeReg(10, -1);
+        kernel.systemCtx->cpu.advancePC();
         return;
     }
 
-    this->systemCtx->cpu.writeReg(10, fd);
-    this->systemCtx->cpu.advancePC();
+    kernel.systemCtx->cpu.writeReg(10, fd);
+    kernel.systemCtx->cpu.advancePC();
 }
 
 void SyscallHandler::handleClose(SyscallStatus& status)
 {
     status.needReschedule = false;
     status.error = false;
-    Word fd = this->systemCtx->cpu.readReg(10);
+    Word fd = kernel.systemCtx->cpu.readReg(10);
 
-    Process* current = this->systemCtx->getCurrentThread()->getProcess();
+    Process* current = kernel.systemCtx->getCurrentThread()->getProcess();
     bool ok = current->closeFileHandle(fd);
     int code = ok ? 0 : 1;
-    this->systemCtx->cpu.writeReg(10, code);
-    this->systemCtx->cpu.advancePC();
+    kernel.systemCtx->cpu.writeReg(10, code);
+    kernel.systemCtx->cpu.advancePC();
 }
 
 void SyscallHandler::handleCreate(SyscallStatus& status)
@@ -385,33 +371,33 @@ void SyscallHandler::handleCreate(SyscallStatus& status)
     status.needReschedule = false;
     status.error = false;
 
-    Word pathAddr = this->systemCtx->cpu.readReg(10);
-    Word size = this->systemCtx->cpu.readReg(11);
+    Word pathAddr = kernel.systemCtx->cpu.readReg(10);
+    Word size = kernel.systemCtx->cpu.readReg(11);
 
     std::string filename;
     // read virtual memory string
     std::size_t offset = 0;
     while (true)
     {
-        char c = static_cast<char>(this->systemCtx->cpu.loadVirtualMemory(pathAddr + offset, 1));
+        char c = static_cast<char>(kernel.systemCtx->cpu.loadVirtualMemory(pathAddr + offset, 1));
         if (c == 0) break;
         filename += c;
         ++offset;
         if (offset > MAX_FILE_NAME_LENGTH) break;
     }
 
-    bool success = this->storageCtx->vfs->createFile(filename, size);
+    bool success = kernel.storageCtx->vfs->createFile(filename, size);
     if (!success)
     {
         LOG(SYSCALL, ERROR, "Failed to create file: " + filename);
-        this->systemCtx->cpu.writeReg(10, -1);
-        this->systemCtx->cpu.advancePC();
+        kernel.systemCtx->cpu.writeReg(10, -1);
+        kernel.systemCtx->cpu.advancePC();
         return;
     }
 
     LOG(SYSCALL, INFO, "Created file: " + filename + " (Size: " + std::to_string(size) + ")");
-    this->systemCtx->cpu.writeReg(10, 0);
-    this->systemCtx->cpu.advancePC();
+    kernel.systemCtx->cpu.writeReg(10, 0);
+    kernel.systemCtx->cpu.advancePC();
 }
 
 void SyscallHandler::handleSbrk(SyscallStatus& status)
@@ -420,22 +406,22 @@ void SyscallHandler::handleSbrk(SyscallStatus& status)
     status.needReschedule = false;
     status.error = false;
 
-    int increment = static_cast<int>(this->systemCtx->cpu.readReg(10));
-    Process* current = this->systemCtx->getCurrentThread()->getProcess();
+    int increment = static_cast<int>(kernel.systemCtx->cpu.readReg(10));
+    Process* current = kernel.systemCtx->getCurrentThread()->getProcess();
     Addr oldBreak = current->sbrk(increment);
 
     // sbrk failed
     if (oldBreak == 0)
     {
         LOG(SYSCALL, ERROR, "Sbrk failed: Out of Heap Memory");
-        this->systemCtx->cpu.writeReg(10, -1);
-        this->systemCtx->cpu.advancePC();
+        kernel.systemCtx->cpu.writeReg(10, -1);
+        kernel.systemCtx->cpu.advancePC();
         return;
     }
 
     LOG(SYSCALL, DEBUG, "Sbrk successful. New Break: " + Utils::toHex(current->getProgramBreak()));
-    this->systemCtx->cpu.writeReg(10, oldBreak);
-    this->systemCtx->cpu.advancePC();
+    kernel.systemCtx->cpu.writeReg(10, oldBreak);
+    kernel.systemCtx->cpu.advancePC();
 }
 
 void SyscallHandler::handleMutexCreate(SyscallStatus& status)
@@ -444,10 +430,10 @@ void SyscallHandler::handleMutexCreate(SyscallStatus& status)
     status.needReschedule = false;
     status.error = false;
 
-    Thread* current = this->systemCtx->getCurrentThread();
+    Thread* current = kernel.systemCtx->getCurrentThread();
     int mutexID = current->getProcess()->createMutex();
-    this->systemCtx->cpu.writeReg(10, mutexID);
-    this->systemCtx->cpu.advancePC();
+    kernel.systemCtx->cpu.writeReg(10, mutexID);
+    kernel.systemCtx->cpu.advancePC();
 }
 
 void SyscallHandler::handleMutexLock(SyscallStatus& status)
@@ -456,8 +442,8 @@ void SyscallHandler::handleMutexLock(SyscallStatus& status)
     status.needReschedule = false;
     status.error = false;
 
-    int mutexID = this->systemCtx->cpu.readReg(10);
-    Thread* current = this->systemCtx->getCurrentThread();
+    int mutexID = kernel.systemCtx->cpu.readReg(10);
+    Thread* current = kernel.systemCtx->getCurrentThread();
     Process* process = current->getProcess();
     Mutex* lock = process->getMutex(mutexID);
 
@@ -465,8 +451,8 @@ void SyscallHandler::handleMutexLock(SyscallStatus& status)
     if (lock == nullptr)
     {
         status.error = true;
-        this->systemCtx->cpu.writeReg(10, -1);
-        this->systemCtx->cpu.advancePC();
+        kernel.systemCtx->cpu.writeReg(10, -1);
+        kernel.systemCtx->cpu.advancePC();
         return;
     }
 
@@ -480,8 +466,8 @@ void SyscallHandler::handleMutexLock(SyscallStatus& status)
     }
 
     // lock is acquired, just advance PC and return 0
-    this->systemCtx->cpu.writeReg(10, 0);
-    this->systemCtx->cpu.advancePC();
+    kernel.systemCtx->cpu.writeReg(10, 0);
+    kernel.systemCtx->cpu.advancePC();
 }
 void SyscallHandler::handleMutexUnlock(SyscallStatus& status)
 {
@@ -489,8 +475,8 @@ void SyscallHandler::handleMutexUnlock(SyscallStatus& status)
     status.needReschedule = false;
     status.error = false;
 
-    int mutexID = this->systemCtx->cpu.readReg(10);
-    Thread* current = this->systemCtx->getCurrentThread();
+    int mutexID = kernel.systemCtx->cpu.readReg(10);
+    Thread* current = kernel.systemCtx->getCurrentThread();
     Process* process = current->getProcess();
     Mutex* lock = process->getMutex(mutexID);
 
@@ -498,8 +484,8 @@ void SyscallHandler::handleMutexUnlock(SyscallStatus& status)
     if (lock == nullptr)
     {
         status.error = true;
-        this->systemCtx->cpu.writeReg(10, -1);
-        this->systemCtx->cpu.advancePC();
+        kernel.systemCtx->cpu.writeReg(10, -1);
+        kernel.systemCtx->cpu.advancePC();
         return;
     }
 
@@ -510,12 +496,12 @@ void SyscallHandler::handleMutexUnlock(SyscallStatus& status)
     if (!success)
     {
         status.error = true;
-        this->systemCtx->cpu.writeReg(10, -1);
-        this->systemCtx->cpu.advancePC();
+        kernel.systemCtx->cpu.writeReg(10, -1);
+        kernel.systemCtx->cpu.advancePC();
         return;
     }
 
     // releasing success
-    this->systemCtx->cpu.writeReg(10, 0);
-    this->systemCtx->cpu.advancePC();
+    kernel.systemCtx->cpu.writeReg(10, 0);
+    kernel.systemCtx->cpu.advancePC();
 }

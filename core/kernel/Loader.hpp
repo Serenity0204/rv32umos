@@ -5,9 +5,6 @@
 class Loader
 {
 public:
-    Loader(SystemContext* ctx);
+    Loader() = default;
     bool loadELF(const std::string& filename);
-
-private:
-    SystemContext* systemCtx;
 };

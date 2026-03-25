@@ -1,11 +1,11 @@
 #include "Loader.hpp"
+#include "Kernel.hpp"
+#include "KernelInstance.hpp"
 #include "Logger.hpp"
 #include "Segment.hpp"
 #include "Utils.hpp"
 #include <elf.h>
 #include <fstream>
-
-Loader::Loader(SystemContext* context) : systemCtx(context) {}
 
 bool Loader::loadELF(const std::string& filename)
 {
@@ -25,9 +25,9 @@ bool Loader::loadELF(const std::string& filename)
     }
 
     // if already max processes, fail the creation
-    if (this->systemCtx->processList.size() == MAX_PROCESS) return false;
+    if (kernel.systemCtx->processList.size() == MAX_PROCESS) return false;
 
-    int newPid = this->systemCtx->processList.size();
+    int newPid = kernel.systemCtx->processList.size();
     Process* process = new Process(newPid, filename);
 
     // Parse Program Headers (Segments)
@@ -60,10 +60,11 @@ bool Loader::loadELF(const std::string& filename)
         LOG(LOADER, ERROR, "Create process failed " + filename);
         return false;
     }
+    mainThread->setupHostContext(reinterpret_cast<void (*)()>(&Kernel::runThread));
     mainThread->setState(ThreadState::READY);
 
-    this->systemCtx->activeThreads.push_back(mainThread);
-    this->systemCtx->processList.push_back(process);
+    kernel.systemCtx->activeThreads.push_back(mainThread);
+    kernel.systemCtx->processList.push_back(process);
 
     LOG(LOADER, INFO, "Created Process " + std::to_string(newPid) + ": " + filename);
     return true;

@@ -1,4 +1,5 @@
 #pragma once
+#include "HardwareTimer.hpp"
 #include "KernelContext.hpp"
 #include "Loader.hpp"
 #include "Process.hpp"
@@ -12,19 +13,21 @@ public:
     Kernel();
     ~Kernel();
     void init();
-    void step();
     bool isRunning();
 
     bool createProcess(const std::string& filename);
     bool killProcess(int pid);
 
-private:
-    SystemContext systemCtx;
-    StorageContext storageCtx;
+    static void runThread(uint32_t lo, uint32_t hi);
+
+public:
+    SystemContext* systemCtx;
+    StorageContext* storageCtx;
 
 private:
     Scheduler* scheduler;
     VirtualMemoryManager* vmm;
     SyscallHandler* syscalls;
     Loader* loader;
+    HardwareTimer* timer;
 };

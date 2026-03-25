@@ -8,9 +8,11 @@
 #include "Stats.hpp"
 #include "StubFileSystem.hpp"
 #include "SwapManager.hpp"
-#include "Timer.hpp"
 #include "VFSInterface.hpp"
+#include <ucontext.h>
 #include <vector>
+
+class Kernel;
 
 struct SystemContext
 {
@@ -21,10 +23,9 @@ public:
 
     std::vector<Thread*> activeThreads;
     int currentThreadIndex = -1;
+    ucontext_t mainContext;
 
-    Timer timer;
-
-    SystemContext() : timer(TIME_QUANTUM)
+    SystemContext()
     {
         this->pmm.init();
     }

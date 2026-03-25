@@ -4,14 +4,15 @@
 class Scheduler
 {
 public:
-    Scheduler(SystemContext* context);
-    void yield();
+    Scheduler() = default;
+    ~Scheduler() = default;
+    // void yield();
+    void preempt();
+    inline bool getIsIdling() const { return this->isIdling; }
 
 private:
     void contextSwitch(std::size_t nextIndex);
     bool checkAllTerminated();
     bool checkCurrentThreadRunnable();
-
-private:
-    SystemContext* systemCtx;
+    bool isIdling = false;
 };

@@ -1,55 +1,70 @@
 #include "Scheduler.hpp"
+#include "KernelInstance.hpp"
 #include "Logger.hpp"
 
-Scheduler::Scheduler(SystemContext* context) : systemCtx(context) {}
-
-void Scheduler::yield()
+void Scheduler::preempt()
 {
-    if (this->systemCtx->activeThreads.empty()) return;
+    if (kernel.systemCtx->activeThreads.empty()) return;
 
-    // Round Robin: Find the next READY thread
-    int nextIndex = this->systemCtx->currentThreadIndex;
+    int prevIndex = kernel.systemCtx->currentThreadIndex;
+    int nextIndex = prevIndex;
     std::size_t attempts = 0;
     bool found = false;
-    std::size_t count = this->systemCtx->activeThreads.size();
+    std::size_t count = kernel.systemCtx->activeThreads.size();
 
     do
     {
         nextIndex = (nextIndex + 1) % count;
         attempts++;
-        if (this->systemCtx->activeThreads[nextIndex]->getState() == ThreadState::READY)
+        if (kernel.systemCtx->activeThreads[nextIndex]->getState() == ThreadState::READY)
         {
             found = true;
             break;
         }
-    } while (attempts <= count);
+    } while (attempts < count);
 
     if (!found)
     {
         bool canRunCurrentProcess = this->checkCurrentThreadRunnable();
-        if (canRunCurrentProcess)
-        {
-            this->systemCtx->timer.reset();
-            return;
-        }
+        if (canRunCurrentProcess) return;
 
         // Check if everyone is terminated
         bool allDead = this->checkAllTerminated();
         if (allDead)
         {
             LOG(SCHEDULER, INFO, "All threads terminated.");
-            this->systemCtx->cpu.halt();
+            kernel.systemCtx->cpu.halt();
+            setcontext(&kernel.systemCtx->mainContext);
+            return;
         }
-        return;
+        LOG(SCHEDULER, INFO, "System IDLE: All threads blocked. Waiting for interrupts...");
+        this->isIdling = true;
+        while (!found)
+        {
+            sigset_t empty_mask;
+            sigemptyset(&empty_mask);
+            sigsuspend(&empty_mask);
+
+            // tick the soft timer, not built yet
+            // kernel.systemCtx->softTimers.tick();
+
+            // Check if the software timer wakes up a thread
+            for (std::size_t i = 0; i < count; ++i)
+            {
+                nextIndex = (nextIndex + 1) % count;
+                if (kernel.systemCtx->activeThreads[nextIndex]->getState() == ThreadState::READY)
+                {
+                    found = true;
+                    break;
+                }
+            }
+        }
+        this->isIdling = false;
     }
 
-    // reset the timer
-    this->systemCtx->timer.reset();
-
-    // Perform Switch
-    if (nextIndex != this->systemCtx->currentThreadIndex)
+    if (nextIndex != prevIndex)
     {
-        Thread* nextThread = this->systemCtx->activeThreads[nextIndex];
+        Thread* nextThread = kernel.systemCtx->activeThreads[nextIndex];
         Process* proc = nextThread->getProcess();
         LOG(SCHEDULER, INFO, "Switching to Thread " + std::to_string(nextThread->getTid()) + " (PID " + std::to_string(proc->getPid()) + ")");
         this->contextSwitch(nextIndex);
@@ -59,34 +74,44 @@ void Scheduler::yield()
 void Scheduler::contextSwitch(std::size_t nextIndex)
 {
     STATS.incContextSwitches();
-    this->systemCtx->timer.tick(CONTEXT_SWITCH_TIME);
 
-    Thread* nextThread = this->systemCtx->activeThreads[nextIndex];
-    Thread* currentThread = this->systemCtx->getCurrentThread();
+    int prevIndex = kernel.systemCtx->currentThreadIndex;
+    Thread* prevThread = (prevIndex != -1) ? kernel.systemCtx->activeThreads[prevIndex] : nullptr;
+    Thread* nextThread = kernel.systemCtx->activeThreads[nextIndex];
 
-    // Save Current State (if valid)
-    if (currentThread != nullptr && currentThread->getState() != ThreadState::TERMINATED)
+    // Layer 1: Swap RISCV State
+    if (prevThread != nullptr && prevThread->getState() != ThreadState::TERMINATED)
     {
-        currentThread->getRegs() = this->systemCtx->cpu.getRegs();
-        currentThread->setPC(this->systemCtx->cpu.getPC());
+        prevThread->getRegs() = kernel.systemCtx->cpu.getRegs();
+        prevThread->setPC(kernel.systemCtx->cpu.getPC());
 
-        if (currentThread->getState() == ThreadState::RUNNING) currentThread->setState(ThreadState::READY);
+        if (prevThread->getState() == ThreadState::RUNNING) prevThread->setState(ThreadState::READY);
     }
 
-    this->systemCtx->cpu.getRegs() = nextThread->getRegs();
-    this->systemCtx->cpu.setPC(nextThread->getPC());
+    kernel.systemCtx->cpu.getRegs() = nextThread->getRegs();
+    kernel.systemCtx->cpu.setPC(nextThread->getPC());
     nextThread->setState(ThreadState::RUNNING);
 
     // check if it's switch within the same process
-    if (currentThread == nullptr || currentThread->getProcess()->getPid() != nextThread->getProcess()->getPid())
-        this->systemCtx->cpu.setPageTable(nextThread->getProcess()->getPageTable());
+    if (prevThread == nullptr || prevThread->getProcess()->getPid() != nextThread->getProcess()->getPid())
+        kernel.systemCtx->cpu.setPageTable(nextThread->getProcess()->getPageTable());
 
-    this->systemCtx->currentThreadIndex = nextIndex;
+    kernel.systemCtx->currentThreadIndex = nextIndex;
+
+    // Layer 2: Swap Host C++ State
+    if (prevThread != nullptr)
+    {
+        swapcontext(&prevThread->hostContext, &nextThread->hostContext);
+        return;
+    }
+
+    // First Boot! Jump away from the main loop context
+    swapcontext(&kernel.systemCtx->mainContext, &nextThread->hostContext);
 }
 
 bool Scheduler::checkCurrentThreadRunnable()
 {
-    Thread* current = this->systemCtx->getCurrentThread();
+    Thread* current = kernel.systemCtx->getCurrentThread();
     if (current == nullptr) return false;
     if (current->getState() == ThreadState::RUNNING) return true;
     return false;
@@ -94,7 +119,7 @@ bool Scheduler::checkCurrentThreadRunnable()
 
 bool Scheduler::checkAllTerminated()
 {
-    for (auto* t : this->systemCtx->activeThreads)
+    for (auto* t : kernel.systemCtx->activeThreads)
     {
         if (t->getState() != ThreadState::TERMINATED) return false;
     }

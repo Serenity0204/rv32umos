@@ -1,22 +1,18 @@
 #include "VirtualMemoryManager.hpp"
+#include "KernelInstance.hpp"
 #include "Logger.hpp"
 #include "Stats.hpp"
 #include "Utils.hpp"
 #include <fstream>
 
-VirtualMemoryManager::VirtualMemoryManager(SystemContext* context, StorageContext* storage)
-    : systemCtx(context), storageCtx(storage)
-{
-}
-
 bool VirtualMemoryManager::handlePageFault(Addr faultAddr)
 {
     STATS.incPageFaults();
-    Thread* currentThread = this->systemCtx->getCurrentThread();
+    Thread* currentThread = kernel.systemCtx->getCurrentThread();
 
     if (currentThread == nullptr)
     {
-        this->systemCtx->cpu.halt();
+        kernel.systemCtx->cpu.halt();
         return false;
     }
 
@@ -28,14 +24,13 @@ bool VirtualMemoryManager::handlePageFault(Addr faultAddr)
     if (pte.swapped && !pte.valid)
     {
         LOG(MMU, INFO, "Swap-In VPN " + Utils::toHex(vpn));
-        this->systemCtx->timer.tick(DISK_IO_TIME);
         Addr newPAddr = this->allocateFrame(process->getPid(), vpn);
         std::vector<Byte> buffer(KERNEL_PAGE_SIZE);
         int slot = static_cast<int>(pte.ppn);
-        this->storageCtx->swap->swapIn(buffer, slot);
+        kernel.storageCtx->swap->swapIn(buffer, slot);
         // store the swap data back to physical memory
         for (Addr i = 0; i < KERNEL_PAGE_SIZE; ++i)
-            this->systemCtx->cpu.storePhysicalMemory(newPAddr + i, 1, buffer[i]);
+            kernel.systemCtx->cpu.storePhysicalMemory(newPAddr + i, 1, buffer[i]);
 
         STATS.incSwapIns();
 
@@ -79,9 +74,7 @@ bool VirtualMemoryManager::handleStackGrowth(Process* proc, Addr faultAddr, Addr
 
         if (faultAddr >= stackBottom && faultAddr < stackTop)
         {
-            this->systemCtx->timer.tick(MEMORY_ALLOCATION_TIME);
             Addr paddr = this->allocateFrame(proc->getPid(), vpn);
-
             PTE& pte = (*proc->getPageTable())[vpn];
             pte.ppn = paddr >> 12;
             pte.valid = true;
@@ -101,12 +94,11 @@ bool VirtualMemoryManager::handleHeapGrowth(Process* proc, Addr faultAddr, Addr 
 {
     if (faultAddr >= HEAP_START && faultAddr < proc->getProgramBreak())
     {
-        this->systemCtx->timer.tick(MEMORY_ALLOCATION_TIME);
         Addr paddr = this->allocateFrame(proc->getPid(), vpn);
 
         // fill the new heap frame with pure zeros to prevent security leaks
         for (Addr i = 0; i < KERNEL_PAGE_SIZE; i++)
-            this->systemCtx->cpu.storePhysicalMemory(paddr + i, 1, 0);
+            kernel.systemCtx->cpu.storePhysicalMemory(paddr + i, 1, 0);
         PTE& pte = (*proc->getPageTable())[vpn];
         pte.ppn = paddr >> 12;
         pte.valid = true;
@@ -126,7 +118,6 @@ bool VirtualMemoryManager::handleLazyLoading(Process* proc, Addr faultAddr, Addr
         // if fault within this segment
         if (faultAddr >= seg.vaddr && faultAddr < seg.vaddr + seg.memSize)
         {
-            this->systemCtx->timer.tick(MEMORY_ALLOCATION_TIME);
             Addr paddr = this->allocateFrame(proc->getPid(), vpn);
             // Calculate offsets
             Addr pageStartVAddr = vpn * KERNEL_PAGE_SIZE;
@@ -137,8 +128,6 @@ bool VirtualMemoryManager::handleLazyLoading(Process* proc, Addr faultAddr, Addr
             // Logic: Read from file if within fileSize; otherwise 0 (BSS)
             if (offsetInSegment < seg.fileSize)
             {
-                this->systemCtx->timer.tick(DISK_IO_TIME);
-
                 size_t bytesToRead = std::min((size_t)KERNEL_PAGE_SIZE, seg.fileSize - offsetInSegment);
                 std::ifstream file(proc->getName(), std::ios::binary);
 
@@ -149,7 +138,7 @@ bool VirtualMemoryManager::handleLazyLoading(Process* proc, Addr faultAddr, Addr
 
             // Write directly to Physical RAM using CPU's debug interface
             for (size_t i = 0; i < KERNEL_PAGE_SIZE; i++)
-                this->systemCtx->cpu.storePhysicalMemory(paddr + i, 1, static_cast<Word>(buffer[i]));
+                kernel.systemCtx->cpu.storePhysicalMemory(paddr + i, 1, static_cast<Word>(buffer[i]));
 
             // Update PTE Struct
             PTE& pte = (*proc->getPageTable())[vpn];
@@ -168,33 +157,33 @@ bool VirtualMemoryManager::handleLazyLoading(Process* proc, Addr faultAddr, Addr
 
 Addr VirtualMemoryManager::allocateFrame(int pid, Addr vpn)
 {
-    FrameAllocInfo info = this->systemCtx->pmm.allocateFrame();
+    FrameAllocInfo info = kernel.systemCtx->pmm.allocateFrame();
 
     // full, must evict and try again
     if (!info.status)
     {
         LOG(MMU, WARNING, "RAM Full. Evicting...");
         this->evictPage();
-        info = this->systemCtx->pmm.allocateFrame();
+        info = kernel.systemCtx->pmm.allocateFrame();
     }
 
     Addr ppn = info.paddr >> 12;
-    this->systemCtx->pmm.registerFrameOwner(ppn, vpn, pid);
-    this->storageCtx->pageReplacementPolicy->onAllocate(ppn);
+    kernel.systemCtx->pmm.registerFrameOwner(ppn, vpn, pid);
+    kernel.storageCtx->pageReplacementPolicy->onAllocate(ppn);
     STATS.incAllocatedFrames();
     return info.paddr;
 }
 
 void VirtualMemoryManager::evictPage()
 {
-    int found = this->storageCtx->pageReplacementPolicy->findVictim(this->systemCtx->pmm.getFrameTable(), this->systemCtx->processList);
+    int found = kernel.storageCtx->pageReplacementPolicy->findVictim(kernel.systemCtx->pmm.getFrameTable(), kernel.systemCtx->processList);
 
     // cannot find victim frame, something wrong
     if (found == -1) throw std::runtime_error("PANIC: OOM and no victim frame found!");
 
     Addr victimPPN = static_cast<Addr>(found);
-    const FrameInfo& info = this->systemCtx->pmm.getFrameTable()[victimPPN];
-    Process* process = this->systemCtx->processList[info.ownerPid];
+    const FrameInfo& info = kernel.systemCtx->pmm.getFrameTable()[victimPPN];
+    Process* process = kernel.systemCtx->processList[info.ownerPid];
     PTE& pte = (*process->getPageTable())[info.vpn];
     Addr paddr = victimPPN * KERNEL_PAGE_SIZE;
 
@@ -205,8 +194,8 @@ void VirtualMemoryManager::evictPage()
         pte.valid = false;
         pte.swapped = false;
         pte.ppn = 0;
-        this->systemCtx->pmm.freeFrame(paddr);
-        this->storageCtx->pageReplacementPolicy->onFree(victimPPN);
+        kernel.systemCtx->pmm.freeFrame(paddr);
+        kernel.storageCtx->pageReplacementPolicy->onFree(victimPPN);
         return;
     }
 
@@ -216,9 +205,9 @@ void VirtualMemoryManager::evictPage()
 
     // load the memory to buffer, and store it in swap
     for (size_t i = 0; i < KERNEL_PAGE_SIZE; ++i)
-        buffer[i] = static_cast<Byte>(this->systemCtx->cpu.loadPhysicalMemory(paddr + i, 1));
+        buffer[i] = static_cast<Byte>(kernel.systemCtx->cpu.loadPhysicalMemory(paddr + i, 1));
 
-    int slot = this->storageCtx->swap->swapOut(buffer);
+    int slot = kernel.storageCtx->swap->swapOut(buffer);
     STATS.incSwapOuts();
     if (slot == -1) throw std::runtime_error("Swap Full!");
 
@@ -226,6 +215,6 @@ void VirtualMemoryManager::evictPage()
     pte.swapped = true;
     pte.ppn = slot;
     pte.dirty = false;
-    this->systemCtx->pmm.freeFrame(paddr);
-    this->storageCtx->pageReplacementPolicy->onFree(victimPPN);
+    kernel.systemCtx->pmm.freeFrame(paddr);
+    kernel.storageCtx->pageReplacementPolicy->onFree(victimPPN);
 }

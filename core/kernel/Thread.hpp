@@ -2,7 +2,9 @@
 
 #include "Common.hpp"
 #include "RegFile.hpp"
+#include <chrono>
 #include <string>
+#include <ucontext.h>
 #include <vector>
 
 class Process;
@@ -73,4 +75,10 @@ public:
 
 private:
     TCB* tcb;
+
+public:
+    // host level stuff
+    ucontext_t hostContext;
+    std::vector<char> hostStack;
+    void setupHostContext(void (*wrapper)());
 };

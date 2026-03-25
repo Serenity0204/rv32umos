@@ -4,14 +4,13 @@
 class VirtualMemoryManager
 {
 public:
-    VirtualMemoryManager(SystemContext* ctx, StorageContext* storage);
+    VirtualMemoryManager() = default;
+    ~VirtualMemoryManager() = default;
 
     // Returns true if fault was handled, false if it was fatal
     bool handlePageFault(Addr faultAddr);
 
 private:
-    SystemContext* systemCtx;
-    StorageContext* storageCtx;
     bool handleStackGrowth(Process* proc, Addr faultAddr, Addr vpn);
     bool handleHeapGrowth(Process* proc, Addr faultAddr, Addr vpn);
     bool handleLazyLoading(Process* proc, Addr faultAddr, Addr vpn);

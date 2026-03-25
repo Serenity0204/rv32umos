@@ -41,7 +41,7 @@ const Addr HEAP_START = VIRTUAL_MEMORY_SIZE / 4;
 const Addr HEAP_MAX_LIMIT = STACK_REGION_BOTTOM;
 
 // for context switch
-const int TIME_QUANTUM = 1000;
+const int TIMER_INTERRUPT_FREQUENCY = 1;
 
 // constants for timer modeling
 const std::size_t USER_MODE_TICK_TIME = 1;

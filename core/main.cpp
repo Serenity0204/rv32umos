@@ -17,7 +17,6 @@ int main(int argc, char* argv[])
 
     Kernel& kernel = KernelInstance::instance();
     bool good = kernel.createProcess(filename);
-    kernel.createProcess(filename);
     if (!good)
     {
         std::cout << "Failed to create process.\n";

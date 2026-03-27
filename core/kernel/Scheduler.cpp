@@ -4,6 +4,7 @@
 
 void Scheduler::preempt()
 {
+    kernel.timerCtx->software.tick();
     if (kernel.systemCtx->activeThreads.empty()) return;
 
     int prevIndex = kernel.systemCtx->currentThreadIndex;
@@ -45,8 +46,8 @@ void Scheduler::preempt()
             sigemptyset(&empty_mask);
             sigsuspend(&empty_mask);
 
-            // tick the soft timer, not built yet
-            // kernel.systemCtx->softTimers.tick();
+            // tick the soft timer
+            kernel.timerCtx->software.tick();
 
             // Check if the software timer wakes up a thread
             for (std::size_t i = 0; i < count; ++i)

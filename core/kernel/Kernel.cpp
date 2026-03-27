@@ -9,6 +9,7 @@
 Kernel::Kernel()
     : systemCtx(nullptr),
       storageCtx(nullptr),
+      timerCtx(nullptr),
       scheduler(nullptr),
       vmm(nullptr),
       syscalls(nullptr),
@@ -17,22 +18,22 @@ Kernel::Kernel()
     this->systemCtx = new SystemContext();
     this->storageCtx = new StorageContext();
     this->storageCtx->init<StubFileSystem, InMemoryDisk, FIFOPolicy>(NUM_DISK_BLOCKS, NUM_SWAP_BLOCKS, this->systemCtx->pmm.getTotalFrames());
+    this->timerCtx = new TimerContext();
     this->scheduler = new Scheduler();
     this->syscalls = new SyscallHandler();
     this->vmm = new VirtualMemoryManager();
     this->loader = new Loader();
-    this->timer = new HardwareTimer();
 }
 
 Kernel::~Kernel()
 {
     delete this->storageCtx;
     delete this->systemCtx;
+    delete this->timerCtx;
     delete this->scheduler;
     delete this->vmm;
     delete this->syscalls;
     delete this->loader;
-    delete this->timer;
 }
 
 bool Kernel::createProcess(const std::string& filename)
@@ -71,7 +72,7 @@ void Kernel::init()
 
     Interrupt::disable();
 
-    this->timer->start(TIMER_INTERRUPT_FREQUENCY);
+    this->timerCtx->hardware.start(TIMER_INTERRUPT_FREQUENCY);
     LOG(KERNEL, INFO, "Simulation started...");
     this->scheduler->preempt();
 }
@@ -120,7 +121,8 @@ void Kernel::runThread(uint32_t lo, uint32_t hi)
         catch (PageFaultException& pf)
         {
             ScopedCriticalSection lock;
-            bool handled = kernel->vmm->handlePageFault(pf.getFaultAddr());
+            bool needReschedule = false;
+            bool handled = kernel->vmm->handlePageFault(pf.getFaultAddr(), needReschedule);
             if (!handled)
             {
                 bool killed = kernel->killProcess(kernel->systemCtx->getCurrentThread()->getProcess()->getPid());
@@ -135,6 +137,7 @@ void Kernel::runThread(uint32_t lo, uint32_t hi)
                 // Thread is dead, safe to return.
                 return;
             }
+            if (needReschedule) kernel->scheduler->preempt();
         }
         catch (std::exception& e)
         {

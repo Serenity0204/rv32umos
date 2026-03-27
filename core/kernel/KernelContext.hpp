@@ -1,10 +1,12 @@
 #pragma once
 #include "CPU.hpp"
 #include "DiskInterface.hpp"
+#include "HardwareTimer.hpp"
 #include "InMemoryDisk.hpp"
 #include "PageReplacementPolicy.hpp"
 #include "PhysicalMemoryManager.hpp"
 #include "Process.hpp"
+#include "SoftwareTimer.hpp"
 #include "Stats.hpp"
 #include "StubFileSystem.hpp"
 #include "SwapManager.hpp"
@@ -77,4 +79,14 @@ struct StorageContext
         delete this->vfs;
         delete this->disk;
     }
+};
+
+struct TimerContext
+{
+public:
+    HardwareTimer hardware;
+    SoftwareTimer software;
+
+    TimerContext() = default;
+    ~TimerContext() = default;
 };

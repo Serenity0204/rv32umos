@@ -4,6 +4,7 @@
 #include "Loader.hpp"
 #include "Process.hpp"
 #include "Scheduler.hpp"
+#include "SoftwareTimer.hpp"
 #include "SyscallHandler.hpp"
 #include "VirtualMemoryManager.hpp"
 
@@ -23,11 +24,11 @@ public:
 public:
     SystemContext* systemCtx;
     StorageContext* storageCtx;
+    TimerContext* timerCtx;
 
 private:
     Scheduler* scheduler;
     VirtualMemoryManager* vmm;
     SyscallHandler* syscalls;
     Loader* loader;
-    HardwareTimer* timer;
 };

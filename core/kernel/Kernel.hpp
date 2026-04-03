@@ -25,8 +25,6 @@ public:
     SystemContext* systemCtx;
     StorageContext* storageCtx;
     TimerContext* timerCtx;
-
-private:
     Scheduler* scheduler;
     VirtualMemoryManager* vmm;
     SyscallHandler* syscalls;

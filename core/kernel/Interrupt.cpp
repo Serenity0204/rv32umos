@@ -1,4 +1,5 @@
 #include "Interrupt.hpp"
+#include "Logger.hpp"
 #include "Scheduler.hpp"
 
 Scheduler* Interrupt::scheduler = nullptr;
@@ -36,7 +37,7 @@ void Interrupt::restore(bool status)
 void Interrupt::timerInterruptHandler(int)
 {
     if (Interrupt::scheduler->getIsIdling()) return;
-
+    LOG(INTERRUPT, INFO, "Timer interrupt fired.");
     Interrupt::scheduler->preempt();
 }
 

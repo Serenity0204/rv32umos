@@ -19,6 +19,9 @@
 #define SYS_CREATE 11
 #define SYS_SBRK 12
 
+#define SYS_CREATE_PROCESS 13
+#define SYS_JOIN_PROCESS 14
+
 // mutex id
 typedef int mutex_t;
 
@@ -44,4 +47,7 @@ int create(const char* filename, int sizeBytes);
 void* sbrk(int increment);
 void* malloc(int size);
 void free(void*);
+
+int create_process(const char* filename);
+int join_process(int pid, int* status);
 #endif

@@ -1,11 +1,18 @@
 #include "Scheduler.hpp"
+#include "Interrupt.hpp"
 #include "KernelInstance.hpp"
 #include "Logger.hpp"
 
 void Scheduler::preempt()
 {
+    bool prev = Interrupt::disable();
+
     kernel.timerCtx->software.tick();
-    if (kernel.systemCtx->activeThreads.empty()) return;
+    if (kernel.systemCtx->activeThreads.empty())
+    {
+        Interrupt::restore(prev);
+        return;
+    }
 
     int prevIndex = kernel.systemCtx->currentThreadIndex;
     int nextIndex = prevIndex;
@@ -27,8 +34,11 @@ void Scheduler::preempt()
     if (!found)
     {
         bool canRunCurrentProcess = this->checkCurrentThreadRunnable();
-        if (canRunCurrentProcess) return;
-
+        if (canRunCurrentProcess)
+        {
+            Interrupt::restore(prev);
+            return;
+        }
         // Check if everyone is terminated
         bool allDead = this->checkAllTerminated();
         if (allDead)
@@ -70,6 +80,7 @@ void Scheduler::preempt()
         LOG(SCHEDULER, INFO, "Switching to Thread " + std::to_string(nextThread->getTid()) + " (PID " + std::to_string(proc->getPid()) + ")");
         this->contextSwitch(nextIndex);
     }
+    Interrupt::restore(prev);
 }
 
 void Scheduler::contextSwitch(std::size_t nextIndex)

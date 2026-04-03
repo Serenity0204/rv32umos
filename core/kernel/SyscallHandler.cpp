@@ -55,6 +55,12 @@ SyscallStatus SyscallHandler::dispatch(SyscallID id)
     case SyscallID::SYS_SBRK:
         this->handleSbrk(status);
         break;
+    case SyscallID::SYS_CREATE_PROCESS:
+        this->handleCreateProcess(status);
+        break;
+    case SyscallID::SYS_JOIN_PROCESS:
+        this->handleJoinProcess(status);
+        break;
     default:
         LOG(SYSCALL, ERROR, "Unimplemented syscall id: " + std::to_string((int)id));
         kernel.systemCtx->cpu.halt();
@@ -198,32 +204,6 @@ void SyscallHandler::handleThreadCreate(SyscallStatus& status)
 
     kernel.systemCtx->cpu.writeReg(10, newThread->getTid());
     kernel.systemCtx->cpu.advancePC();
-}
-
-void SyscallHandler::handleExit(SyscallStatus& status)
-{
-    // reset status
-    status.needReschedule = false;
-    status.error = false;
-
-    Word exitCode = kernel.systemCtx->cpu.readReg(10);
-    Thread* current = kernel.systemCtx->getCurrentThread();
-
-    if (current == nullptr)
-    {
-        kernel.systemCtx->cpu.halt();
-        return;
-    }
-
-    Process* proc = current->getProcess();
-
-    std::vector<Thread*>& threads = proc->getThreads();
-    for (Thread* t : threads)
-        t->setState(ThreadState::TERMINATED);
-
-    LOG(KERNEL, INFO, "Process " + std::to_string(proc->getPid()) + " (Group Exit) terminated with code " + std::to_string(exitCode));
-
-    status.needReschedule = true;
 }
 
 void SyscallHandler::handleWrite(SyscallStatus& status)
@@ -551,4 +531,102 @@ void SyscallHandler::handleMutexUnlock(SyscallStatus& status)
     // releasing success
     kernel.systemCtx->cpu.writeReg(10, 0);
     kernel.systemCtx->cpu.advancePC();
+}
+
+void SyscallHandler::handleCreateProcess(SyscallStatus& status)
+{
+    status.needReschedule = false;
+    status.error = false;
+
+    // read virtual memory string for filename
+    Word pathAddr = kernel.systemCtx->cpu.readReg(10);
+    std::string filename;
+    std::size_t offset = 0;
+    while (true)
+    {
+        char c = static_cast<char>(kernel.systemCtx->cpu.loadVirtualMemory(pathAddr + offset, 1));
+        if (c == 0) break;
+        filename += c;
+        if (++offset > MAX_FILE_NAME_LENGTH) break;
+    }
+
+    int createdPid = kernel.loader->loadELF(filename);
+    if (createdPid == -1)
+    {
+        kernel.systemCtx->cpu.writeReg(10, -1);
+        kernel.systemCtx->cpu.advancePC();
+        return;
+    }
+    kernel.systemCtx->cpu.writeReg(10, createdPid);
+    kernel.systemCtx->cpu.advancePC();
+}
+
+void SyscallHandler::handleJoinProcess(SyscallStatus& status)
+{
+    status.needReschedule = false;
+    status.error = false;
+
+    int targetPid = static_cast<int>(kernel.systemCtx->cpu.readReg(10));
+    Word statusPtr = kernel.systemCtx->cpu.readReg(11);
+
+    // Fast Path: process already dead
+    if (kernel.systemCtx->exitCodes.count(targetPid))
+    {
+        int exitCode = kernel.systemCtx->exitCodes[targetPid];
+        if (statusPtr != 0)
+            kernel.systemCtx->cpu.storeVirtualMemory(statusPtr, 4, static_cast<Word>(exitCode));
+
+        kernel.systemCtx->exitCodes.erase(targetPid);
+        kernel.systemCtx->cpu.writeReg(10, 1);
+        kernel.systemCtx->cpu.advancePC();
+        LOG(SYSCALL, INFO, "Join instantly reaped cached Exit Code for PID " + std::to_string(targetPid));
+        return;
+    }
+
+    bool validPID = (targetPid >= 0) && (targetPid < MAX_PROCESS) && kernel.systemCtx->processList[targetPid]->isActive();
+
+    // invalid PID
+    if (!validPID)
+    {
+        LOG(SYSCALL, ERROR, "Join failed: invalid or inactive PID " + std::to_string(targetPid));
+        kernel.systemCtx->cpu.writeReg(10, -1);
+        kernel.systemCtx->cpu.advancePC();
+        return;
+    }
+
+    // if process still running
+    Thread* current = kernel.systemCtx->getCurrentThread();
+    kernel.systemCtx->processWaiters[targetPid].push_back(current);
+    current->setState(ThreadState::BLOCKED);
+    status.needReschedule = true;
+    LOG(SYSCALL, INFO, "Thread " + std::to_string(current->getTid()) + " BLOCKED waiting for PID " + std::to_string(targetPid));
+    // PC is NOT advanced. When woken up, it will re-execute and hit Fast Path.
+}
+
+void SyscallHandler::handleExit(SyscallStatus& status)
+{
+    // reset status
+    status.needReschedule = false;
+    status.error = false;
+
+    Word exitCode = kernel.systemCtx->cpu.readReg(10);
+    Thread* current = kernel.systemCtx->getCurrentThread();
+
+    if (current == nullptr)
+    {
+        kernel.systemCtx->cpu.halt();
+        return;
+    }
+
+    Process* proc = current->getProcess();
+    int currentPid = proc->getPid();
+
+    bool ok = Process::terminate(currentPid, static_cast<int>(exitCode), false);
+    if (!ok)
+    {
+        LOG(KERNEL, ERROR, "KERNEL PANIC: Failed to terminate process " + std::to_string(currentPid));
+        kernel.systemCtx->cpu.halt();
+        return;
+    }
+    status.needReschedule = true;
 }

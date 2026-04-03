@@ -18,7 +18,8 @@ enum class LogSource
     SYSCALL,
     MMU,
     LOADER,
-    CPU
+    CPU,
+    INTERRUPT
 };
 
 class Logger
@@ -55,6 +56,9 @@ public:
             break;
         case LogSource::CPU:
             sourceStr = "[CPU      ]";
+            break;
+        case LogSource::INTERRUPT:
+            sourceStr = "[INTERRUPT]";
             break;
         }
 

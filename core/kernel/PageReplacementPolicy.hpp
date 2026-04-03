@@ -1,6 +1,6 @@
 #pragma once
+#include "Common.hpp"
 #include "Process.hpp"
-#include "Types.hpp"
 #include <cstddef>
 #include <queue>
 #include <vector>

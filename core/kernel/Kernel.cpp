@@ -38,23 +38,12 @@ Kernel::~Kernel()
 
 bool Kernel::createProcess(const std::string& filename)
 {
-    return this->loader->loadELF(filename);
+    return this->loader->loadELF(filename) != -1;
 }
 
 bool Kernel::killProcess(int pid)
 {
-    if (pid < 0 || static_cast<size_t>(pid) >= this->systemCtx->processList.size())
-    {
-        LOG(KERNEL, ERROR, "Killing process with PID: " + std::to_string(pid) + " that does not exist.");
-        return false;
-    }
-    Process* process = this->systemCtx->processList[pid];
-    std::vector<Thread*>& allThreads = process->getThreads();
-    for (Thread* thread : allThreads)
-        thread->setState(ThreadState::TERMINATED);
-
-    LOG(KERNEL, INFO, "Killing Process " + std::to_string(pid) + " (CRASHED)");
-    return true;
+    return Process::terminate(pid, -1, true);
 }
 
 void Kernel::init()
@@ -91,6 +80,8 @@ void Kernel::runThread(uint32_t lo, uint32_t hi)
         if (kernel->systemCtx->cpu.isHalted()) break;
         Interrupt::restore(status);
 
+        bool threadDead = false;
+
         try
         {
             STATS.incInstructions();
@@ -99,7 +90,7 @@ void Kernel::runThread(uint32_t lo, uint32_t hi)
         }
         catch (SyscallException& sys)
         {
-            ScopedCriticalSection lock;
+            bool prev = Interrupt::disable();
             SyscallStatus status = kernel->syscalls->dispatch(sys.getSyscallID());
 
             if (status.error)
@@ -112,15 +103,15 @@ void Kernel::runThread(uint32_t lo, uint32_t hi)
                     setcontext(&kernel->systemCtx->mainContext);
                     return;
                 }
-                kernel->scheduler->preempt();
-                // Thread is dead, returning is safe here
-                return;
+                threadDead = true;
             }
-            if (status.needReschedule) kernel->scheduler->preempt();
+            if (!status.error) Interrupt::restore(prev);
+            if (!status.error && status.needReschedule) kernel->scheduler->preempt();
         }
         catch (PageFaultException& pf)
         {
-            ScopedCriticalSection lock;
+            bool prev = Interrupt::disable();
+
             bool needReschedule = false;
             bool handled = kernel->vmm->handlePageFault(pf.getFaultAddr(), needReschedule);
             if (!handled)
@@ -133,15 +124,14 @@ void Kernel::runThread(uint32_t lo, uint32_t hi)
                     setcontext(&kernel->systemCtx->mainContext);
                     return;
                 }
-                kernel->scheduler->preempt();
-                // Thread is dead, safe to return.
-                return;
+                threadDead = true;
             }
-            if (needReschedule) kernel->scheduler->preempt();
+            if (handled) Interrupt::restore(prev);
+            if (handled && needReschedule) kernel->scheduler->preempt();
         }
         catch (std::exception& e)
         {
-            ScopedCriticalSection lock;
+            Interrupt::disable();
             LOG(KERNEL, ERROR, "Unhandled C++ Exception: " + std::string(e.what()));
 
             bool killed = kernel->killProcess(kernel->systemCtx->getCurrentThread()->getProcess()->getPid());
@@ -152,8 +142,13 @@ void Kernel::runThread(uint32_t lo, uint32_t hi)
                 setcontext(&kernel->systemCtx->mainContext);
                 return;
             }
+            threadDead = true;
+        }
+
+        if (threadDead)
+        {
             kernel->scheduler->preempt();
-            // Thread is dead, safe to return.
+            // Thread is dead, returning is safe here
             return;
         }
     }

@@ -6,5 +6,6 @@ class Loader
 {
 public:
     Loader() = default;
-    bool loadELF(const std::string& filename);
+    // return PID if success, else -1
+    int loadELF(const std::string& filename);
 };

@@ -12,6 +12,7 @@
 #include "SwapManager.hpp"
 #include "VFSInterface.hpp"
 #include <ucontext.h>
+#include <unordered_map>
 #include <vector>
 
 class Kernel;
@@ -21,8 +22,13 @@ struct SystemContext
 public:
     CPU cpu;
     PhysicalMemoryManager pmm;
-    std::vector<Process*> processList;
 
+    // Maps PID -> Exit Code
+    std::unordered_map<int, int> exitCodes;
+    // Maps PID -> List of Threads waiting for that PID to exit
+    std::unordered_map<int, std::vector<Thread*>> processWaiters;
+
+    std::vector<Process*> processList;
     std::vector<Thread*> activeThreads;
     int currentThreadIndex = -1;
     ucontext_t mainContext;
@@ -30,12 +36,19 @@ public:
     SystemContext()
     {
         this->pmm.init();
+        for (int i = 0; i < MAX_PROCESS; ++i)
+        {
+            Process* p = new Process(i, "");
+            p->setActive(false);
+            this->processList.push_back(p);
+        }
     }
 
     ~SystemContext()
     {
         for (auto* p : this->processList) delete p;
         this->processList.clear();
+        for (auto* t : this->activeThreads) delete t;
         this->activeThreads.clear();
     }
 

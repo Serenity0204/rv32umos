@@ -7,28 +7,40 @@
 #include <elf.h>
 #include <fstream>
 
-bool Loader::loadELF(const std::string& filename)
+int Loader::loadELF(const std::string& filename)
 {
     std::ifstream file(filename, std::ios::binary);
-    if (!file) return false;
+    if (!file) return -1;
 
     // elf header
     Elf32_Ehdr ehdr;
-    if (!file.read(reinterpret_cast<char*>(&ehdr), sizeof(ehdr))) return false;
+    if (!file.read(reinterpret_cast<char*>(&ehdr), sizeof(ehdr))) return -1;
 
     // Verify Magic: 0x7F 'E' 'L' 'F'
     if (ehdr.e_ident[EI_MAG0] != ELFMAG0 || ehdr.e_ident[EI_MAG1] != ELFMAG1 ||
         ehdr.e_ident[EI_MAG2] != ELFMAG2 || ehdr.e_ident[EI_MAG3] != ELFMAG3)
     {
         LOG(LOADER, ERROR, "Not a valid ELF file: " + filename);
-        return false;
+        return -1;
     }
 
-    // if already max processes, fail the creation
-    if (kernel.systemCtx->processList.size() == MAX_PROCESS) return false;
+    int newPid = -1;
+    for (size_t i = 0; i < kernel.systemCtx->processList.size(); ++i)
+    {
+        Process* p = kernel.systemCtx->processList[i];
+        // slot holds a non active process
+        if (!p->isActive())
+        {
+            p->recycle(filename);
+            newPid = static_cast<int>(i);
+            break;
+        }
+    }
 
-    int newPid = kernel.systemCtx->processList.size();
-    Process* process = new Process(newPid, filename);
+    // full
+    if (newPid == -1) return -1;
+
+    Process* process = kernel.systemCtx->processList[newPid];
 
     // Parse Program Headers (Segments)
     file.seekg(ehdr.e_phoff);
@@ -56,16 +68,15 @@ bool Loader::loadELF(const std::string& filename)
     if (mainThread == nullptr)
     {
         // create main thread fails, kill the process
-        delete process;
+        process->setActive(false);
         LOG(LOADER, ERROR, "Create process failed " + filename);
-        return false;
+        return -1;
     }
     mainThread->setupHostContext(reinterpret_cast<void (*)()>(&Kernel::runThread));
     mainThread->setState(ThreadState::READY);
 
     kernel.systemCtx->activeThreads.push_back(mainThread);
-    kernel.systemCtx->processList.push_back(process);
 
     LOG(LOADER, INFO, "Created Process " + std::to_string(newPid) + ": " + filename);
-    return true;
+    return newPid;
 }

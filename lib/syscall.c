@@ -88,3 +88,13 @@ void* malloc(int size)
 void free(void*)
 {
 }
+
+int create_process(const char* filename)
+{
+    return syscall(SYS_CREATE_PROCESS, (int)filename);
+}
+
+int join_process(int pid, int* status)
+{
+    return syscall(SYS_JOIN_PROCESS, pid, (int)status);
+}

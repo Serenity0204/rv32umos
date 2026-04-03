@@ -1,6 +1,6 @@
 #pragma once
-#include "Exception.hpp"
 #include "KernelContext.hpp"
+#include "SyscallDefinition.hpp"
 
 class SyscallHandler
 {
@@ -18,6 +18,8 @@ private:
     void handleClose(SyscallStatus& status);
     void handleCreate(SyscallStatus& status);
     void handleSbrk(SyscallStatus& status);
+    void handleCreateProcess(SyscallStatus& status);
+    void handleJoinProcess(SyscallStatus& status);
 
     // threads related
     void handleThreadCreate(SyscallStatus& status);

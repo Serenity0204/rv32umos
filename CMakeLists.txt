@@ -12,45 +12,44 @@ project(rv32simOS CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Add warnings (equivalent to -Wall -Wextra)
+# Add warnings
 add_compile_options(-Wall -Wextra)
 
 # --- 2. Include Directories ---
-# Equivalent to -Icore/machine -Icore/common -Icore/kernel
+# Updated to match your new flat folder structure
 include_directories(
-    core/machine
     core/common
-    core/kernel
+    core/disk
     core/filesystem
+    core/hardware
+    core/interrupt
+    core/kernel
+    core/memory
+    core/process
+    core/scheduler
+    core/sync
+    core/syscall
+    core/thread
 )
 
 # --- 3. Source Files ---
-# Find sources (Equivalent to wildcard)
+# Find sources in the new locations
 file(GLOB_RECURSE SOURCES 
     "core/main.cpp"
-    "core/machine/*.cpp" 
-    "core/kernel/*.cpp"
-    "core/filesystem/*.cpp"
+    "core/*.cpp"
 )
 
-# --- 4. Main Target (The Emulator) ---
+# --- 4. Main Target ---
 add_executable(rv32simOS ${SOURCES})
 
 # --- 5. Custom Target: Programs ---
-# Find all .c files in programs/
 file(GLOB PROGRAM_SOURCES "programs/*.c")
-
-# List to keep track of generated bin files
 set(PROGRAM_BINS "")
 
 foreach(SOURCE_FILE ${PROGRAM_SOURCES})
-    # Get filename without extension (e.g., "programs/test.c" -> "test")
     get_filename_component(NAME_WE ${SOURCE_FILE} NAME_WE)
-    
-    # Define expected output file (assuming your script creates .bin files in the same dir)
     set(OUTPUT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/programs/${NAME_WE}.bin")
     
-    # Create a rule to generate the .bin from the .c
     add_custom_command(
         OUTPUT ${OUTPUT_FILE}
         COMMAND ${CMAKE_SOURCE_DIR}/scripts/compile.sh ${SOURCE_FILE}
@@ -62,9 +61,5 @@ foreach(SOURCE_FILE ${PROGRAM_SOURCES})
     list(APPEND PROGRAM_BINS ${OUTPUT_FILE})
 endforeach()
 
-# Create a target 'programs' that depends on all the .bin files
-# 'ALL' ensures this runs by default when you type 'make'
 add_custom_target(programs ALL DEPENDS ${PROGRAM_BINS})
-
-# Helper to clean up the generated .bin files when running 'make clean'
 set_directory_properties(PROPERTIES ADDITIONAL_CLEAN_FILES "${PROGRAM_BINS}")

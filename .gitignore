@@ -1,5 +1,5 @@
 build/
-rv32simOS
+rv32umos
 .vscode/
 
 programs/*.bin

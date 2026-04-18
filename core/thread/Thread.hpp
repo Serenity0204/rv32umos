@@ -4,9 +4,9 @@
 #include "RegFile.hpp"
 #include <chrono>
 #include <string>
-#include <ucontext.h>
 #include <vector>
 
+extern "C" void context_switch(void** old_sp, void* new_sp);
 class Process;
 
 enum class ThreadState
@@ -78,7 +78,8 @@ private:
 
 public:
     // host level stuff
-    ucontext_t hostContext;
+    void* hostStackPointer = nullptr;
     std::vector<char> hostStack;
     void setupHostContext(void (*wrapper)());
+    uint64_t sleepTimerId = 0;
 };

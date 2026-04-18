@@ -10,18 +10,16 @@ Thread::~Thread()
     delete this->tcb;
 }
 
-void Thread::setupHostContext(void (*wrapper)())
+void Thread::setupHostContext(void (*func)())
 {
-    getcontext(&this->hostContext);
+    // Host side context switch setup
+    this->hostStack.resize(HOST_STACK_SIZE);
+    uintptr_t sp_addr = reinterpret_cast<uintptr_t>(this->hostStack.data() + this->hostStack.size());
+    sp_addr &= ~0xF;
+    uint64_t* sp = reinterpret_cast<uint64_t*>(sp_addr);
 
-    this->hostStack.resize(8 * 1024 * 1024);
-    this->hostContext.uc_stack.ss_sp = this->hostStack.data();
-    this->hostContext.uc_stack.ss_size = this->hostStack.size();
-    this->hostContext.uc_link = nullptr;
-
-    uintptr_t ptr = reinterpret_cast<uintptr_t>(&KernelInstance::instance());
-    uint32_t lo = static_cast<uint32_t>(ptr & 0xFFFFFFFF);
-    uint32_t hi = static_cast<uint32_t>((ptr >> 32) & 0xFFFFFFFF);
-
-    makecontext(&this->hostContext, wrapper, 2, lo, hi);
+    *(--sp) = 0;
+    *(--sp) = reinterpret_cast<uint64_t>(func);
+    for (int i = 0; i < 6; ++i) *(--sp) = 0;
+    this->hostStackPointer = sp;
 }

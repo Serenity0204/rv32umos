@@ -11,7 +11,6 @@
 #include "StubFileSystem.hpp"
 #include "SwapManager.hpp"
 #include "VFSInterface.hpp"
-#include <ucontext.h>
 #include <unordered_map>
 #include <vector>
 
@@ -31,7 +30,9 @@ public:
     std::vector<Process*> processList;
     std::vector<Thread*> activeThreads;
     int currentThreadIndex = -1;
-    ucontext_t mainContext;
+
+    // host stuff
+    void* mainStackPointer = nullptr;
 
     SystemContext()
     {

@@ -8,13 +8,14 @@ public:
     ~VirtualMemoryManager() = default;
 
     // Returns true if fault was handled, false if it was fatal
-    bool handlePageFault(Addr faultAddr, bool& needReschedule);
+    bool handlePageFault(Addr faultAddr);
 
 private:
-    bool handleStackGrowth(Process* proc, Addr faultAddr, Addr vpn, bool& needReschedule);
-    bool handleHeapGrowth(Process* proc, Addr faultAddr, Addr vpn, bool& needReschedule);
-    bool handleLazyLoading(Process* proc, Addr faultAddr, Addr vpn, bool& needReschedule);
+    bool handleSwapIn(Process* proc, Addr vpn);
+    bool handleStackGrowth(Process* proc, Addr faultAddr, Addr vpn);
+    bool handleHeapGrowth(Process* proc, Addr faultAddr, Addr vpn);
+    bool handleLazyLoading(Process* proc, Addr faultAddr, Addr vpn);
 
-    Addr allocateFrame(int pid, Addr vpn, bool& needReschedule);
-    void evictPage(bool& needReschedule);
+    Addr allocateFrame(int pid, Addr vpn);
+    void evictPage();
 };

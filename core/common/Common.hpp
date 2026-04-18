@@ -54,6 +54,7 @@ const std::size_t HOST_STACK_SIZE = 1024 * 1024 * 8;
 // constants for timer modeling(ms)
 const std::size_t DISK_IO_TIME = 10;
 const std::size_t FILE_IO_TIME = 5;
+const std::size_t MEMORY_ALLOCATION_TIME = 5;
 
 // for disk
 const std::size_t BLOCK_SIZE = 4096;

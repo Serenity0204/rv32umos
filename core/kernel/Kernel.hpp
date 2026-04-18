@@ -19,7 +19,7 @@ public:
     bool createProcess(const std::string& filename);
     bool killProcess(int pid);
 
-    static void runThread(uint32_t lo, uint32_t hi);
+    static void runThread();
 
 public:
     SystemContext* systemCtx;

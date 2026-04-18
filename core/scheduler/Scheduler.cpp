@@ -2,6 +2,7 @@
 #include "Interrupt.hpp"
 #include "KernelInstance.hpp"
 #include "Logger.hpp"
+#include "Thread.hpp"
 
 void Scheduler::preempt()
 {
@@ -45,7 +46,8 @@ void Scheduler::preempt()
         {
             LOG(SCHEDULER, INFO, "All threads terminated.");
             kernel.systemCtx->cpu.halt();
-            setcontext(&kernel.systemCtx->mainContext);
+            void* dummy_sp = nullptr;
+            context_switch(&dummy_sp, kernel.systemCtx->mainStackPointer);
             return;
         }
         LOG(SCHEDULER, INFO, "System IDLE: All threads blocked. Waiting for interrupts...");
@@ -113,12 +115,12 @@ void Scheduler::contextSwitch(std::size_t nextIndex)
     // Layer 2: Swap Host C++ State
     if (prevThread != nullptr)
     {
-        swapcontext(&prevThread->hostContext, &nextThread->hostContext);
+        context_switch(&prevThread->hostStackPointer, nextThread->hostStackPointer);
         return;
     }
 
     // First Boot! Jump away from the main loop context
-    swapcontext(&kernel.systemCtx->mainContext, &nextThread->hostContext);
+    context_switch(&kernel.systemCtx->mainStackPointer, nextThread->hostStackPointer);
 }
 
 bool Scheduler::checkCurrentThreadRunnable()
@@ -136,4 +138,29 @@ bool Scheduler::checkAllTerminated()
         if (t->getState() != ThreadState::TERMINATED) return false;
     }
     return true;
+}
+
+void Scheduler::sleepCurrentThread(int delayMs, const std::string& reason)
+{
+    Thread* current = kernel.systemCtx->getCurrentThread();
+    if (current == nullptr) return;
+
+    if (current->getState() == ThreadState::BLOCKED)
+    {
+        // the thread is already blocked Natively extend its underlying timer.
+        bool extended = kernel.timerCtx->software.extendTimer(current->sleepTimerId, delayMs);
+        if (extended)
+            LOG(SCHEDULER, INFO, "Extended sleep for Thread " + std::to_string(current->getTid()) + " by " + std::to_string(delayMs) + "ms for " + reason);
+        return;
+    }
+
+    current->setState(ThreadState::BLOCKED);
+    LOG(SCHEDULER, INFO, "Thread " + std::to_string(current->getTid()) + " BLOCKED for " + reason + " (" + std::to_string(delayMs) + "ms)");
+
+    current->sleepTimerId = kernel.timerCtx->software.registerTimer(delayMs, [current, reason]()
+    {
+        current->setState(ThreadState::READY);
+        current->sleepTimerId = 0;
+        LOG(SCHEDULER, INFO, reason + " Complete: Waking up Thread " + std::to_string(current->getTid()));
+    });
 }

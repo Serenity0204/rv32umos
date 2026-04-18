@@ -240,23 +240,12 @@ void SyscallHandler::handleWrite(SyscallStatus& status)
         buffer[i] = c;
     }
 
+    // will block if it's disk IO
     int written = handle->write(buffer, count);
     kernel.systemCtx->cpu.writeReg(10, written);
     kernel.systemCtx->cpu.advancePC();
-    // FAST PATH FOR CONSOLE
-    if (handle->type() == FileHandleInterface::Type::Console) return;
 
-    int delayMs = 5 + (count / 1024);
-    currentThread->setState(ThreadState::BLOCKED);
-    LOG(SYSCALL, INFO, "Thread " + std::to_string(currentThread->getTid()) + " BLOCKED for Async Write (" + std::to_string(delayMs) + "ms)");
-
-    kernel.timerCtx->software.registerTimer(delayMs, [currentThread]()
-    {
-        currentThread->setState(ThreadState::READY);
-        LOG(SYSCALL, INFO, "Async Write Complete: Waking up Thread " + std::to_string(currentThread->getTid()));
-    });
-
-    status.needReschedule = true;
+    if (currentThread->getState() == ThreadState::BLOCKED) status.needReschedule = true;
 }
 
 void SyscallHandler::handleRead(SyscallStatus& status)
@@ -302,20 +291,7 @@ void SyscallHandler::handleRead(SyscallStatus& status)
     kernel.systemCtx->cpu.writeReg(10, bytesRead);
     kernel.systemCtx->cpu.advancePC();
 
-    // FAST PATH FOR CONSOLE
-    if (handle->type() == FileHandleInterface::Type::Console) return;
-
-    int delayMs = 5 + (count / 1024);
-    currentThread->setState(ThreadState::BLOCKED);
-    LOG(SYSCALL, INFO, "Thread " + std::to_string(currentThread->getTid()) + " BLOCKED for Async Read (" + std::to_string(delayMs) + "ms)");
-
-    kernel.timerCtx->software.registerTimer(delayMs, [currentThread]()
-    {
-        currentThread->setState(ThreadState::READY);
-        LOG(SYSCALL, INFO, "Async Read Complete: Waking up Thread " + std::to_string(currentThread->getTid()));
-    });
-
-    status.needReschedule = true;
+    if (currentThread->getState() == ThreadState::BLOCKED) status.needReschedule = true;
 }
 
 void SyscallHandler::handleOpen(SyscallStatus& status)
@@ -362,12 +338,7 @@ void SyscallHandler::handleOpen(SyscallStatus& status)
     kernel.systemCtx->cpu.writeReg(10, fd);
     kernel.systemCtx->cpu.advancePC();
 
-    currentThread->setState(ThreadState::BLOCKED);
-    kernel.timerCtx->software.registerTimer(5, [currentThread]()
-    {
-        currentThread->setState(ThreadState::READY);
-    });
-    status.needReschedule = true;
+    if (currentThread->getState() == ThreadState::BLOCKED) status.needReschedule = true;
 }
 
 void SyscallHandler::handleClose(SyscallStatus& status)
@@ -418,13 +389,7 @@ void SyscallHandler::handleCreate(SyscallStatus& status)
     kernel.systemCtx->cpu.writeReg(10, 0);
     kernel.systemCtx->cpu.advancePC();
 
-    currentThread->setState(ThreadState::BLOCKED);
-    kernel.timerCtx->software.registerTimer(10, [currentThread]()
-    {
-        currentThread->setState(ThreadState::READY);
-    });
-
-    status.needReschedule = true;
+    if (currentThread->getState() == ThreadState::BLOCKED) status.needReschedule = true;
 }
 
 void SyscallHandler::handleSbrk(SyscallStatus& status)

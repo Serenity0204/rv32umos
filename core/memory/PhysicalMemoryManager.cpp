@@ -1,4 +1,5 @@
 #include "PhysicalMemoryManager.hpp"
+#include "KernelInstance.hpp"
 
 void PhysicalMemoryManager::init()
 {
@@ -11,6 +12,7 @@ void PhysicalMemoryManager::init()
 
 FrameAllocInfo PhysicalMemoryManager::allocateFrame()
 {
+    kernel.scheduler->sleepCurrentThread(MEMORY_ALLOCATION_TIME, "Memory Allocation");
     // status = false to trigger swap
     FrameAllocInfo info;
     if (this->freeFrames.empty())

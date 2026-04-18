@@ -9,6 +9,7 @@ public:
     // void yield();
     void preempt();
     inline bool getIsIdling() const { return this->isIdling; }
+    void sleepCurrentThread(int delayMs, const std::string& reason);
 
 private:
     void contextSwitch(std::size_t nextIndex);

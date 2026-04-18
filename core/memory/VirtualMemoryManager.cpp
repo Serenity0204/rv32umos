@@ -5,9 +5,8 @@
 #include "Utils.hpp"
 #include <fstream>
 
-bool VirtualMemoryManager::handlePageFault(Addr faultAddr, bool& needReschedule)
+bool VirtualMemoryManager::handlePageFault(Addr faultAddr)
 {
-    needReschedule = false;
     STATS.incPageFaults();
     Thread* currentThread = kernel.systemCtx->getCurrentThread();
 
@@ -21,11 +20,37 @@ bool VirtualMemoryManager::handlePageFault(Addr faultAddr, bool& needReschedule)
     Addr vpn = faultAddr >> 12;
     PTE& pte = (*process->getPageTable())[vpn];
 
+    // faulting when the pte clearly still exists, it's a permission error
+    if (pte.valid)
+    {
+        LOG(KERNEL, ERROR, "Protection Fault: Thread " + std::to_string(currentThread->getTid()) + " tried to access protected " + Utils::toHex(faultAddr));
+        return false;
+    }
+
     // if in swap
+    if (this->handleSwapIn(process, vpn)) return true;
+
+    // if it's under stack limit, allocate one physical page and set the page table entry
+    if (this->handleStackGrowth(process, faultAddr, vpn)) return true;
+
+    // check for segments for lazy loading
+    if (this->handleLazyLoading(process, faultAddr, vpn)) return true;
+
+    // Check if it's a valid heap access
+    if (this->handleHeapGrowth(process, faultAddr, vpn)) return true;
+    // If it's not stack, it's a real crash (SegFault), return false to let the handler handle it
+    LOG(KERNEL, ERROR, "Thread " + std::to_string(currentThread->getTid()) + " (PID " + std::to_string(process->getPid()) + ")" + " causes Segmentation Fault: Invalid access at " + Utils::toHex(faultAddr));
+    return false;
+}
+
+bool VirtualMemoryManager::handleSwapIn(Process* proc, Addr vpn)
+{
+    PTE& pte = (*proc->getPageTable())[vpn];
+
     if (pte.swapped && !pte.valid)
     {
         LOG(MMU, INFO, "Swap-In VPN " + Utils::toHex(vpn));
-        Addr newPAddr = this->allocateFrame(process->getPid(), vpn, needReschedule);
+        Addr newPAddr = this->allocateFrame(proc->getPid(), vpn);
         std::vector<Byte> buffer(KERNEL_PAGE_SIZE);
         int slot = static_cast<int>(pte.ppn);
         kernel.storageCtx->swap->swapIn(buffer, slot);
@@ -39,43 +64,13 @@ bool VirtualMemoryManager::handlePageFault(Addr faultAddr, bool& needReschedule)
         pte.valid = true;
         pte.referenced = true;
         pte.dirty = false;
-        currentThread->setState(ThreadState::BLOCKED);
-        LOG(MMU, INFO, "Thread " + std::to_string(currentThread->getTid()) + " BLOCKED for Swap-In (10ms)");
-
-        kernel.timerCtx->software.registerTimer(5, [currentThread]()
-        {
-            currentThread->setState(ThreadState::READY);
-            LOG(MMU, INFO, "Swap-In Complete: Waking up Thread " + std::to_string(currentThread->getTid()));
-        });
-        needReschedule = true;
-
         return true;
     }
-
-    // faulting when the pte clearly still exists, it's a permission error
-    if (pte.valid)
-    {
-        LOG(KERNEL, ERROR, "Protection Fault: Thread " + std::to_string(currentThread->getTid()) + " tried to access protected " + Utils::toHex(faultAddr));
-        return false;
-    }
-
-    // if it's under stack limit, allocate one physical page and set the page table entry
-    if (this->handleStackGrowth(process, faultAddr, vpn, needReschedule)) return true;
-
-    // check for segments for lazy loading
-    if (this->handleLazyLoading(process, faultAddr, vpn, needReschedule)) return true;
-
-    // Check if it's a valid heap access
-    if (this->handleHeapGrowth(process, faultAddr, vpn, needReschedule)) return true;
-    // If it's not stack, it's a real crash (SegFault), return false to let the handler handle it
-    LOG(KERNEL, ERROR, "Thread " + std::to_string(currentThread->getTid()) + " (PID " + std::to_string(process->getPid()) + ")" + " causes Segmentation Fault: Invalid access at " + Utils::toHex(faultAddr));
     return false;
 }
 
-bool VirtualMemoryManager::handleStackGrowth(Process* proc, Addr faultAddr, Addr vpn, bool& needReschedule)
+bool VirtualMemoryManager::handleStackGrowth(Process* proc, Addr faultAddr, Addr vpn)
 {
-    needReschedule = false;
-
     // not even a stack region
     if (faultAddr < STACK_REGION_BOTTOM || faultAddr >= STACK_TOP) return false;
 
@@ -87,7 +82,7 @@ bool VirtualMemoryManager::handleStackGrowth(Process* proc, Addr faultAddr, Addr
 
         if (faultAddr >= stackBottom && faultAddr < stackTop)
         {
-            Addr paddr = this->allocateFrame(proc->getPid(), vpn, needReschedule);
+            Addr paddr = this->allocateFrame(proc->getPid(), vpn);
             PTE& pte = (*proc->getPageTable())[vpn];
             pte.ppn = paddr >> 12;
             pte.valid = true;
@@ -103,13 +98,11 @@ bool VirtualMemoryManager::handleStackGrowth(Process* proc, Addr faultAddr, Addr
     return false;
 }
 
-bool VirtualMemoryManager::handleHeapGrowth(Process* proc, Addr faultAddr, Addr vpn, bool& needReschedule)
+bool VirtualMemoryManager::handleHeapGrowth(Process* proc, Addr faultAddr, Addr vpn)
 {
-    needReschedule = false;
-
     if (faultAddr >= HEAP_START && faultAddr < proc->getProgramBreak())
     {
-        Addr paddr = this->allocateFrame(proc->getPid(), vpn, needReschedule);
+        Addr paddr = this->allocateFrame(proc->getPid(), vpn);
 
         // fill the new heap frame with pure zeros to prevent security leaks
         for (Addr i = 0; i < KERNEL_PAGE_SIZE; i++)
@@ -126,15 +119,14 @@ bool VirtualMemoryManager::handleHeapGrowth(Process* proc, Addr faultAddr, Addr 
     return false;
 }
 
-bool VirtualMemoryManager::handleLazyLoading(Process* proc, Addr faultAddr, Addr vpn, bool& needReschedule)
+bool VirtualMemoryManager::handleLazyLoading(Process* proc, Addr faultAddr, Addr vpn)
 {
-    needReschedule = false;
     for (const Segment& seg : proc->getSegments())
     {
         // if fault within this segment
         if (faultAddr >= seg.vaddr && faultAddr < seg.vaddr + seg.memSize)
         {
-            Addr paddr = this->allocateFrame(proc->getPid(), vpn, needReschedule);
+            Addr paddr = this->allocateFrame(proc->getPid(), vpn);
             // Calculate offsets
             Addr pageStartVAddr = vpn * KERNEL_PAGE_SIZE;
             size_t offsetInSegment = pageStartVAddr - seg.vaddr;
@@ -165,34 +157,21 @@ bool VirtualMemoryManager::handleLazyLoading(Process* proc, Addr faultAddr, Addr
             PTE::setPTEFlagsFromElf(pte, seg.flags);
 
             LOG(MMU, DEBUG, "Segment Page Loaded: " + Utils::toHex(pageStartVAddr));
-
-            Thread* currentThread = kernel.systemCtx->getCurrentThread();
-            currentThread->setState(ThreadState::BLOCKED);
-            LOG(MMU, INFO, "Thread " + std::to_string(currentThread->getTid()) + " BLOCKED for Lazy Load (10ms)");
-
-            kernel.timerCtx->software.registerTimer(5, [currentThread]()
-            {
-                currentThread->setState(ThreadState::READY);
-                LOG(MMU, INFO, "Lazy Load Complete: Waking up Thread " + std::to_string(currentThread->getTid()));
-            });
-
-            needReschedule = true;
             return true;
         }
     }
     return false;
 }
 
-Addr VirtualMemoryManager::allocateFrame(int pid, Addr vpn, bool& needReschedule)
+Addr VirtualMemoryManager::allocateFrame(int pid, Addr vpn)
 {
-    needReschedule = false;
     FrameAllocInfo info = kernel.systemCtx->pmm.allocateFrame();
 
     // full, must evict and try again
     if (!info.status)
     {
         LOG(MMU, WARNING, "RAM Full. Evicting...");
-        this->evictPage(needReschedule);
+        this->evictPage();
         info = kernel.systemCtx->pmm.allocateFrame();
     }
 
@@ -203,10 +182,8 @@ Addr VirtualMemoryManager::allocateFrame(int pid, Addr vpn, bool& needReschedule
     return info.paddr;
 }
 
-void VirtualMemoryManager::evictPage(bool& needReschedule)
+void VirtualMemoryManager::evictPage()
 {
-    needReschedule = false;
-
     int found = kernel.storageCtx->pageReplacementPolicy->findVictim(kernel.systemCtx->pmm.getFrameTable(), kernel.systemCtx->processList);
 
     // cannot find victim frame, something wrong
@@ -248,16 +225,4 @@ void VirtualMemoryManager::evictPage(bool& needReschedule)
     pte.dirty = false;
     kernel.systemCtx->pmm.freeFrame(paddr);
     kernel.storageCtx->pageReplacementPolicy->onFree(victimPPN);
-
-    Thread* currentThread = kernel.systemCtx->getCurrentThread();
-    currentThread->setState(ThreadState::BLOCKED);
-    LOG(MMU, INFO, "Thread " + std::to_string(currentThread->getTid()) + " BLOCKED for Swap-Out (10ms)");
-
-    kernel.timerCtx->software.registerTimer(5, [currentThread]()
-    {
-        currentThread->setState(ThreadState::READY);
-        LOG(MMU, INFO, "Swap-Out Complete: Waking up Thread " + std::to_string(currentThread->getTid()));
-    });
-
-    needReschedule = true;
 }

@@ -1,6 +1,7 @@
 #include "Kernel.hpp"
 #include "Exception.hpp"
 #include "Interrupt.hpp"
+#include "KernelInstance.hpp"
 #include "Logger.hpp"
 #include "ScopedCriticalSection.hpp"
 #include "Stats.hpp"
@@ -66,18 +67,15 @@ void Kernel::init()
     this->scheduler->preempt();
 }
 
-void Kernel::runThread(uint32_t lo, uint32_t hi)
+void Kernel::runThread()
 {
-    uintptr_t ptr = (static_cast<uintptr_t>(hi) << 32) | lo;
-    Kernel* kernel = reinterpret_cast<Kernel*>(ptr);
-
     Interrupt::enable();
 
     while (true)
     {
         // atomic check
         bool status = Interrupt::disable();
-        if (kernel->systemCtx->cpu.isHalted()) break;
+        if (kernel.systemCtx->cpu.isHalted()) break;
         Interrupt::restore(status);
 
         bool threadDead = false;
@@ -85,61 +83,64 @@ void Kernel::runThread(uint32_t lo, uint32_t hi)
         try
         {
             STATS.incInstructions();
-            kernel->systemCtx->cpu.step();
-            kernel->systemCtx->cpu.advancePC();
+            kernel.systemCtx->cpu.step();
+            kernel.systemCtx->cpu.advancePC();
         }
         catch (SyscallException& sys)
         {
             bool prev = Interrupt::disable();
-            SyscallStatus status = kernel->syscalls->dispatch(sys.getSyscallID());
+            SyscallStatus status = kernel.syscalls->dispatch(sys.getSyscallID());
 
             if (status.error)
             {
-                bool killed = kernel->killProcess(kernel->systemCtx->getCurrentThread()->getProcess()->getPid());
+                bool killed = kernel.killProcess(kernel.systemCtx->getCurrentThread()->getProcess()->getPid());
                 if (!killed)
                 {
                     LOG(KERNEL, ERROR, "KERNEL PANIC: Failed to kill process after Syscall Error!");
-                    kernel->systemCtx->cpu.halt();
-                    setcontext(&kernel->systemCtx->mainContext);
+                    kernel.systemCtx->cpu.halt();
+                    // jump to main
+                    void* dummy_sp = nullptr;
+                    context_switch(&dummy_sp, kernel.systemCtx->mainStackPointer);
                     return;
                 }
                 threadDead = true;
             }
             if (!status.error) Interrupt::restore(prev);
-            if (!status.error && status.needReschedule) kernel->scheduler->preempt();
+            if (!status.error && status.needReschedule) kernel.scheduler->preempt();
         }
         catch (PageFaultException& pf)
         {
             bool prev = Interrupt::disable();
 
-            bool needReschedule = false;
-            bool handled = kernel->vmm->handlePageFault(pf.getFaultAddr(), needReschedule);
+            bool handled = kernel.vmm->handlePageFault(pf.getFaultAddr());
             if (!handled)
             {
-                bool killed = kernel->killProcess(kernel->systemCtx->getCurrentThread()->getProcess()->getPid());
+                bool killed = kernel.killProcess(kernel.systemCtx->getCurrentThread()->getProcess()->getPid());
                 if (!killed)
                 {
                     LOG(KERNEL, ERROR, "KERNEL PANIC: Failed to kill process after Segfault!");
-                    kernel->systemCtx->cpu.halt();
-                    setcontext(&kernel->systemCtx->mainContext);
+                    kernel.systemCtx->cpu.halt();
+                    void* dummy_sp = nullptr;
+                    context_switch(&dummy_sp, kernel.systemCtx->mainStackPointer);
                     return;
                 }
                 threadDead = true;
             }
             if (handled) Interrupt::restore(prev);
-            if (handled && needReschedule) kernel->scheduler->preempt();
+            if (handled && kernel.systemCtx->getCurrentThread()->getState() == ThreadState::BLOCKED) kernel.scheduler->preempt();
         }
         catch (std::exception& e)
         {
             Interrupt::disable();
             LOG(KERNEL, ERROR, "Unhandled C++ Exception: " + std::string(e.what()));
 
-            bool killed = kernel->killProcess(kernel->systemCtx->getCurrentThread()->getProcess()->getPid());
+            bool killed = kernel.killProcess(kernel.systemCtx->getCurrentThread()->getProcess()->getPid());
             if (!killed)
             {
                 LOG(KERNEL, ERROR, "KERNEL PANIC: Failed to kill process after Exception!");
-                kernel->systemCtx->cpu.halt();
-                setcontext(&kernel->systemCtx->mainContext);
+                kernel.systemCtx->cpu.halt();
+                void* dummy_sp = nullptr;
+                context_switch(&dummy_sp, kernel.systemCtx->mainStackPointer);
                 return;
             }
             threadDead = true;
@@ -147,7 +148,7 @@ void Kernel::runThread(uint32_t lo, uint32_t hi)
 
         if (threadDead)
         {
-            kernel->scheduler->preempt();
+            kernel.scheduler->preempt();
             // Thread is dead, returning is safe here
             return;
         }
@@ -155,22 +156,24 @@ void Kernel::runThread(uint32_t lo, uint32_t hi)
 
     // kernel panic
     Interrupt::disable();
-    Thread* current = kernel->systemCtx->getCurrentThread();
+    Thread* current = kernel.systemCtx->getCurrentThread();
     if (current != nullptr)
     {
-        bool killed = kernel->killProcess(current->getProcess()->getPid());
+        bool killed = kernel.killProcess(current->getProcess()->getPid());
         if (!killed)
         {
             LOG(KERNEL, ERROR, "KERNEL PANIC: CPU Halted and process kill failed.");
-            setcontext(&kernel->systemCtx->mainContext);
+            void* dummy_sp = nullptr;
+            context_switch(&dummy_sp, kernel.systemCtx->mainStackPointer);
             return;
         }
-        kernel->scheduler->preempt();
+        kernel.scheduler->preempt();
         return;
     }
 
     LOG(KERNEL, ERROR, "KERNEL PANIC: CPU Halted with no active thread.");
-    setcontext(&kernel->systemCtx->mainContext);
+    void* dummy_sp = nullptr;
+    context_switch(&dummy_sp, kernel.systemCtx->mainStackPointer);
 }
 
 bool Kernel::isRunning()

@@ -11,7 +11,6 @@ using TimerCallback = std::function<void()>;
 struct TimerEvent
 {
     std::chrono::steady_clock::time_point expiration;
-    TimerCallback callback;
     uint64_t id;
 
     bool operator>(const TimerEvent& other) const
@@ -20,11 +19,18 @@ struct TimerEvent
     }
 };
 
+struct TimerInfo
+{
+    std::chrono::steady_clock::time_point expiration;
+    TimerCallback callback;
+    bool active;
+};
+
 class SoftwareTimer
 {
 private:
-    std::priority_queue<TimerEvent, std::vector<TimerEvent>, std::greater<TimerEvent>> timers;
-    std::unordered_set<uint64_t> cancelledTimers;
+    std::unordered_map<uint64_t, TimerInfo> activeTimers;
+    std::priority_queue<TimerEvent, std::vector<TimerEvent>, std::greater<TimerEvent>> queue;
     uint64_t nextId = 0;
 
 public:
@@ -33,5 +39,6 @@ public:
 
     uint64_t registerTimer(int delayMs, TimerCallback cb);
     void cancelTimer(uint64_t id);
+    bool extendTimer(uint64_t id, int extraDelayMs);
     void tick();
 };

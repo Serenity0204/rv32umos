@@ -1,20 +1,23 @@
 #include "StubFileSystem.hpp"
 #include "Common.hpp"
 #include "DiskFileHandle.hpp"
+#include "KernelInstance.hpp"
 #include <cmath>
 
 StubFileSystem::StubFileSystem(DiskInterface* disk) : disk(disk), freeBlockPointer(0)
 {
 }
 
-FileHandleInterface* StubFileSystem::open(const std::string& filename)
+FileHandleInterface* StubFileSystem::openImpl(const std::string& filename)
 {
     if (!this->fileTable.count(filename)) return nullptr;
+    kernel.scheduler->sleepCurrentThread(5, "VFS Open");
+
     FileMetadata meta = this->fileTable.at(filename);
     return new DiskFileHandle(this->disk, meta.startBlock, meta.sizeBytes);
 }
 
-bool StubFileSystem::createFile(const std::string& filename, std::size_t sizeBytes)
+bool StubFileSystem::createFileImpl(const std::string& filename, std::size_t sizeBytes)
 {
     if (this->fileTable.count(filename) > 0) return false;
 
@@ -37,7 +40,7 @@ bool StubFileSystem::createFile(const std::string& filename, std::size_t sizeByt
     return true;
 }
 
-bool StubFileSystem::removeFile(const std::string& filename)
+bool StubFileSystem::removeFileImpl(const std::string& filename)
 {
     if (!this->fileTable.count(filename)) return false;
     this->fileTable.erase(filename);

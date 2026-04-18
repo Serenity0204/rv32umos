@@ -10,9 +10,9 @@ public:
     StubFileSystem(DiskInterface* disk);
     ~StubFileSystem() = default;
 
-    FileHandleInterface* open(const std::string& filename) override;
-    bool createFile(const std::string& filename, std::size_t sizeBytes) override;
-    bool removeFile(const std::string& filename) override;
+    FileHandleInterface* openImpl(const std::string& filename) override;
+    bool createFileImpl(const std::string& filename, std::size_t sizeBytes) override;
+    bool removeFileImpl(const std::string& filename) override;
 
 private:
     struct FileMetadata

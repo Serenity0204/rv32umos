@@ -46,15 +46,14 @@ const Addr HEAP_START = VIRTUAL_MEMORY_SIZE / 4;
 const Addr HEAP_MAX_LIMIT = STACK_REGION_BOTTOM;
 
 // for context switch
-const int TIMER_INTERRUPT_FREQUENCY = 5;
+const int TIMER_INTERRUPT_FREQUENCY = 25;
 
-// constants for timer modeling
-const std::size_t USER_MODE_TICK_TIME = 1;
-const std::size_t ENTER_KERNEL_MODE_TIME = 20;
-const std::size_t CONTEXT_SWITCH_TIME = 50;
-const std::size_t SYSCALL_BASE_TIME = 10;
-const std::size_t MEMORY_ALLOCATION_TIME = 100;
-const std::size_t DISK_IO_TIME = 5000;
+// 8 MB
+const std::size_t HOST_STACK_SIZE = 1024 * 1024 * 8;
+
+// constants for timer modeling(ms)
+const std::size_t DISK_IO_TIME = 10;
+const std::size_t FILE_IO_TIME = 5;
 
 // for disk
 const std::size_t BLOCK_SIZE = 4096;

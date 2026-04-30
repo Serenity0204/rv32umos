@@ -1,6 +1,6 @@
-#include "Kernel.hpp"
-#include "KernelInstance.hpp"
 #include "Logger.hpp"
+#include "RV32UMOS.hpp"
+#include "Stats.hpp"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -42,22 +42,25 @@ int main(int argc, char* argv[])
     }
 
     std::vector<std::string> args = parseArgs(argc, argv);
-
     bool printLogs = parseEnableLogs(args);
     std::vector<std::string> filenames = parseElfFiles(args);
+
+    RV32UMOS::init();
+
     for (const std::string& filename : filenames)
     {
-        bool ok = kernel.createProcess(filename);
+        bool ok = RV32UMOS::loadApplication(filename);
         if (!ok)
         {
-            std::cout << "Create Process with filename:" << filename << " failed. " << std::endl;
+            std::cout << "Create Process with filename: " << filename << " failed." << std::endl;
+            RV32UMOS::destroy();
             return 1;
         }
     }
-    kernel.init();
 
+    RV32UMOS::start();
     if (printLogs) SHOW_LOGS();
     STATS.printSummary();
-    return 0;
+    RV32UMOS::destroy();
     return 0;
 }

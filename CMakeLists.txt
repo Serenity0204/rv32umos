@@ -18,6 +18,7 @@ add_compile_options(-Wall -Wextra)
 # --- 2. Include Directories ---
 # Updated to match your new flat folder structure
 include_directories(
+    core/
     core/common
     core/disk
     core/filesystem
@@ -35,6 +36,7 @@ include_directories(
 # --- 3. Source Files ---
 # Find sources in the new locations
 file(GLOB_RECURSE SOURCES 
+    "core/RV32UMOS.cpp"
     "core/main.cpp"
     "core/*.cpp"
     "core/*.S"

@@ -1,35 +1,39 @@
 #pragma once
-#include "HardwareTimer.hpp"
-#include "KernelContext.hpp"
+
+#include "HAL.hpp"
 #include "Loader.hpp"
-#include "Process.hpp"
+#include "PageReplacementPolicy.hpp"
+#include "ProcessManager.hpp"
 #include "Scheduler.hpp"
 #include "SoftwareTimer.hpp"
+#include "SwapManager.hpp"
 #include "SyscallHandler.hpp"
+#include "VFSInterface.hpp"
 #include "VirtualMemoryManager.hpp"
 
-class Kernel
+struct Kernel
 {
-private:
-    void initInternal();
-    void destroyInternal();
+    // kernel core components
+    Scheduler* scheduler = nullptr;
+    ProcessManager* procManager = nullptr;
+    SyscallHandler* syscalls = nullptr;
+    VirtualMemoryManager* vmm = nullptr;
+    SoftwareTimer* alarm = nullptr;
+    SwapManager* swap = nullptr;
 
-public:
-    Kernel();
-    ~Kernel();
-    void init();
-    void reset();
-    bool createProcess(const std::string& filename);
-    bool killProcess(int pid);
+    // filesystem related
+    PageReplacementPolicy* pageReplacementPolicy = nullptr;
+    VFSInterface* vfs = nullptr;
 
-    static void runThread();
+    // hardware abstraction
+    HAL* hal = nullptr;
 
-public:
-    SystemContext* systemCtx;
-    StorageContext* storageCtx;
-    TimerContext* timerCtx;
-    Scheduler* scheduler;
-    VirtualMemoryManager* vmm;
-    SyscallHandler* syscalls;
-    Loader* loader;
+    Kernel() = default;
+    ~Kernel() = default;
+};
+
+namespace kernelfunction
+{
+    void initKernelSubsystem(Kernel* kernel);
+    void destroyKernelSubsystem(Kernel* kernel);
 };

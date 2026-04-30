@@ -1,7 +1,6 @@
 #include "StubFileSystem.hpp"
 #include "Common.hpp"
 #include "DiskFileHandle.hpp"
-#include "KernelInstance.hpp"
 #include <cmath>
 
 StubFileSystem::StubFileSystem(DiskInterface* disk) : disk(disk), freeBlockPointer(0)

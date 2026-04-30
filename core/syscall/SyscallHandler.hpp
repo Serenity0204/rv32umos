@@ -1,5 +1,4 @@
 #pragma once
-#include "KernelContext.hpp"
 #include "SyscallDefinition.hpp"
 
 class SyscallHandler

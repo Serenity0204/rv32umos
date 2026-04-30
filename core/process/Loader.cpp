@@ -1,7 +1,8 @@
 #include "Loader.hpp"
 #include "Kernel.hpp"
-#include "KernelInstance.hpp"
+#include "KernelAlias.hpp"
 #include "Logger.hpp"
+#include "RV32UMOS.hpp"
 #include "Segment.hpp"
 #include "Utils.hpp"
 #include <elf.h>
@@ -25,9 +26,9 @@ int Loader::loadELF(const std::string& filename)
     }
 
     int newPid = -1;
-    for (size_t i = 0; i < kernel.systemCtx->processList.size(); ++i)
+    for (size_t i = 0; i < K_PROC_MANAGER->processList.size(); ++i)
     {
-        Process* p = kernel.systemCtx->processList[i];
+        Process* p = K_PROC_MANAGER->processList[i];
         // slot holds a non active process
         if (!p->isActive())
         {
@@ -40,7 +41,7 @@ int Loader::loadELF(const std::string& filename)
     // full
     if (newPid == -1) return -1;
 
-    Process* process = kernel.systemCtx->processList[newPid];
+    Process* process = K_PROC_MANAGER->processList[newPid];
 
     // Parse Program Headers (Segments)
     file.seekg(ehdr.e_phoff);
@@ -72,10 +73,10 @@ int Loader::loadELF(const std::string& filename)
         LOG(LOADER, ERROR, "Create process failed " + filename);
         return -1;
     }
-    mainThread->setupHostContext(reinterpret_cast<void (*)()>(&Kernel::runThread));
+    mainThread->setupHostContext(reinterpret_cast<void (*)()>(RV32UMOS::runThread));
     mainThread->setState(ThreadState::READY);
 
-    kernel.systemCtx->activeThreads.push_back(mainThread);
+    K_PROC_MANAGER->activeThreads.push_back(mainThread);
 
     LOG(LOADER, INFO, "Created Process " + std::to_string(newPid) + ": " + filename);
     return newPid;

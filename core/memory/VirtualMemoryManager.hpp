@@ -1,5 +1,5 @@
 #pragma once
-#include "KernelContext.hpp"
+#include "Process.hpp"
 
 class VirtualMemoryManager
 {

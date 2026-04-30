@@ -1,6 +1,7 @@
 #include "Process.hpp"
-#include "KernelInstance.hpp"
+#include "KernelAlias.hpp"
 #include "Logger.hpp"
+#include "Stats.hpp"
 
 Process::Process(int id, std::string name)
 {
@@ -119,7 +120,7 @@ void Process::wipeMemory()
         if (pte.valid)
         {
             Addr paddr = pte.ppn * KERNEL_PAGE_SIZE;
-            kernel.systemCtx->pmm.freeFrame(paddr);
+            K_HAL->pmm.freeFrame(paddr);
         }
     }
 }
@@ -163,13 +164,13 @@ void Process::recycle(std::string newName)
 
 bool Process::terminate(int pid, int exitCode, bool crashed)
 {
-    if (pid < 0 || static_cast<size_t>(pid) >= kernel.systemCtx->processList.size())
+    if (pid < 0 || static_cast<size_t>(pid) >= K_PROC_MANAGER->processList.size())
     {
         LOG(KERNEL, ERROR, "Killing process with PID: " + std::to_string(pid) + " that does not exist.");
         return false;
     }
 
-    Process* process = kernel.systemCtx->processList[pid];
+    Process* process = K_PROC_MANAGER->processList[pid];
     if (!process->isActive())
     {
         LOG(KERNEL, ERROR, "Killing process with PID: " + std::to_string(pid) + " that is not active.");
@@ -184,14 +185,14 @@ bool Process::terminate(int pid, int exitCode, bool crashed)
         thread->setState(ThreadState::TERMINATED);
 
     // cache exit code for any joiners
-    kernel.systemCtx->exitCodes[pid] = exitCode;
+    K_PROC_MANAGER->exitCodes[pid] = exitCode;
 
     // wake up any threads blocked waiting for this process
-    if (kernel.systemCtx->processWaiters.count(pid))
+    if (K_PROC_MANAGER->processWaiters.count(pid))
     {
-        for (Thread* waiter : kernel.systemCtx->processWaiters[pid])
+        for (Thread* waiter : K_PROC_MANAGER->processWaiters[pid])
             waiter->setState(ThreadState::READY);
-        kernel.systemCtx->processWaiters.erase(pid);
+        K_PROC_MANAGER->processWaiters.erase(pid);
     }
 
     // record the stats

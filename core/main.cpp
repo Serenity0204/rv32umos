@@ -58,7 +58,10 @@ int main(int argc, char* argv[])
         }
     }
 
-    RV32UMOS::start();
+    RV32UMOS rv32umos;
+    rv32umos.start();
+    rv32umos.waitForShutdown();
+
     if (printLogs) SHOW_LOGS();
     STATS.printSummary();
     RV32UMOS::destroy();

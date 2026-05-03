@@ -8,15 +8,18 @@
 #include "Stats.hpp"
 
 Kernel* RV32UMOS::kernel = nullptr;
+static HostBus systemBus;
 
 void RV32UMOS::init()
 {
     RV32UMOS::kernel = new Kernel();
     kernelfunction::initKernelSubsystem(RV32UMOS::kernel);
+    KernelService::registerService("bus", &systemBus);
 }
 
 void RV32UMOS::destroy()
 {
+    K_HAL->timer.stop();
     kernelfunction::destroyKernelSubsystem(RV32UMOS::kernel);
     delete RV32UMOS::kernel;
     RV32UMOS::kernel = nullptr;
@@ -31,6 +34,11 @@ void RV32UMOS::reset()
 bool RV32UMOS::loadApplication(const std::string& filename)
 {
     return K_PROC_MANAGER->createProcess(filename);
+}
+
+void RV32UMOS::runLoop()
+{
+    K_SCHEDULER->preempt();
 }
 
 void RV32UMOS::start()
@@ -50,11 +58,11 @@ void RV32UMOS::start()
 
     K_HAL->timer.start(TIMER_INTERRUPT_FREQUENCY);
     LOG(KERNEL, INFO, "rv32umos Booting...");
-    K_SCHEDULER->preempt();
-    K_HAL->timer.stop();
+
+    HostObject::start();
 }
 
-void RV32UMOS::runThread()
+void RV32UMOS::executionLoop()
 {
     Interrupt::enable();
 

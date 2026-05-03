@@ -192,7 +192,7 @@ void SyscallHandler::handleThreadCreate(SyscallStatus& status)
         K_HAL->cpu.advancePC();
         return;
     }
-    newThread->setupHostContext(reinterpret_cast<void (*)()>(&RV32UMOS::runThread));
+    newThread->setupHostContext(reinterpret_cast<void (*)()>(&RV32UMOS::executionLoop));
     newThread->setState(ThreadState::READY);
     K_PROC_MANAGER->activeThreads.push_back(newThread);
 

@@ -120,7 +120,7 @@ void Process::wipeMemory()
         if (pte.valid)
         {
             Addr paddr = pte.ppn * KERNEL_PAGE_SIZE;
-            K_HAL->pmm.freeFrame(paddr);
+            K_PMM->freeFrame(paddr);
         }
     }
 }

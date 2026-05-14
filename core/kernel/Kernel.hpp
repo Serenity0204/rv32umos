@@ -1,9 +1,11 @@
 #pragma once
 
 #include "Alarm.hpp"
+#include "Exception.hpp"
 #include "HAL.hpp"
 #include "Loader.hpp"
 #include "PageReplacementPolicy.hpp"
+#include "PhysicalMemoryManager.hpp"
 #include "ProcessManager.hpp"
 #include "Scheduler.hpp"
 #include "SwapManager.hpp"
@@ -11,11 +13,13 @@
 #include "VFSInterface.hpp"
 #include "VirtualMemoryManager.hpp"
 
-struct Kernel
+class Kernel
 {
+private:
     // kernel core components
     Scheduler* scheduler = nullptr;
     ProcessManager* procManager = nullptr;
+    PhysicalMemoryManager* pmm = nullptr;
     SyscallHandler* syscalls = nullptr;
     VirtualMemoryManager* vmm = nullptr;
     Alarm* alarm = nullptr;
@@ -28,12 +32,13 @@ struct Kernel
     // hardware abstraction
     HAL* hal = nullptr;
 
+public:
     Kernel() = default;
     ~Kernel() = default;
-};
 
-namespace kernelfunction
-{
-    void initKernelSubsystem(Kernel* kernel);
-    void destroyKernelSubsystem(Kernel* kernel);
+    static void initKernelSubsystem(Kernel* kernel);
+    static void destroyKernelSubsystem(Kernel* kernel);
+
+    static void handleSyscall(SyscallException& sys);
+    static void handlePageFault(PageFaultException& pf);
 };

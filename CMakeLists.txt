@@ -18,7 +18,6 @@ include_directories(
     core/disk
     core/filesystem
     core/hardware
-    core/interrupt
     core/kernel
     core/memory
     core/process

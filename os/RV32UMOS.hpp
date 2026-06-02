@@ -5,6 +5,7 @@ class RV32UMOS
 {
 private:
     static Kernel* kernel;
+    static void initMachine();
 
 public:
     RV32UMOS() = default;

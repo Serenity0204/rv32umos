@@ -12,3 +12,8 @@ void DiskInterface::writeBlock(std::size_t blockIndex, const std::vector<Byte>& 
     TIME_COST(DISK_IO_TIME, "Disk Write");
     this->writeBlockImpl(blockIndex, buffer);
 }
+
+DeviceType DiskInterface::getType() const
+{
+    return DeviceType::Disk;
+}

@@ -1,25 +1,28 @@
 #include "Alarm.hpp"
+#include "HAL.hpp"
 
 uint64_t Alarm::registerTimer(int delayMs, AlarmCallback cb)
 {
-    ScopedCriticalSection lock;
+    bool prev = INTERRUPT_HAL->disable();
     auto expireTime = std::chrono::steady_clock::now() + std::chrono::milliseconds(delayMs);
     uint64_t id = ++this->nextId;
     this->activeTimers[id] = {expireTime, cb, true};
     this->queue.push({expireTime, id});
+    INTERRUPT_HAL->restore(prev);
     return id;
 }
 
 void Alarm::cancelTimer(uint64_t id)
 {
-    ScopedCriticalSection lock;
+    bool prev = INTERRUPT_HAL->disable();
     if (this->activeTimers.count(id))
         this->activeTimers[id].active = false;
+    INTERRUPT_HAL->restore(prev);
 }
 
 bool Alarm::extendTimer(uint64_t id, int extraDelayMs)
 {
-    ScopedCriticalSection lock;
+    bool prev = INTERRUPT_HAL->disable();
     if (this->activeTimers.count(id) && this->activeTimers[id].active)
     {
         // Add the extra time to the existing true expiration
@@ -29,14 +32,16 @@ bool Alarm::extendTimer(uint64_t id, int extraDelayMs)
         // Push the updated time into the queue.
         // The old event will be discarded later because the expiration won't match!
         this->queue.push({newExpire, id});
+        INTERRUPT_HAL->restore(prev);
         return true;
     }
+    INTERRUPT_HAL->restore(prev);
     return false;
 }
 
 void Alarm::tick()
 {
-    ScopedCriticalSection lock;
+    bool prev = INTERRUPT_HAL->disable();
     auto now = std::chrono::steady_clock::now();
 
     while (!this->queue.empty())
@@ -61,4 +66,6 @@ void Alarm::tick()
             cb();
         }
     }
+
+    INTERRUPT_HAL->restore(prev);
 }

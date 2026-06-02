@@ -1,18 +1,42 @@
 #include "RV32UMOS.hpp"
 #include "Exception.hpp"
+#include "HAL.hpp"
 #include "Interrupt.hpp"
 #include "KernelAlias.hpp"
 #include "KernelPanic.hpp"
 #include "KernelService.hpp"
 #include "Logger.hpp"
 #include "Stats.hpp"
+#include "SystemConfig.hpp"
 
 Kernel* RV32UMOS::kernel = nullptr;
+static HAL* hal = nullptr;
+
+void RV32UMOS::initMachine()
+{
+    // init HAL and devices
+    hal = new HAL();
+    Memory* memory = new Memory();
+    Machine* cpu = new Machine();
+    HardwareTimer* timer = new HardwareTimer();
+    DiskInterface* disk = new DiskImpl(NUM_DISK_BLOCKS);
+    Interrupt* interrupt = new Interrupt();
+
+    cpu->setMemory(memory);
+
+    // register devices to HAL device map
+    hal->registerDevice(memory);
+    hal->registerDevice(cpu);
+    hal->registerDevice(timer);
+    hal->registerDevice(disk);
+    hal->registerDevice(interrupt);
+}
 
 void RV32UMOS::init()
 {
+    RV32UMOS::initMachine();
     RV32UMOS::kernel = new Kernel();
-    Kernel::initKernelSubsystem(RV32UMOS::kernel);
+    Kernel::initKernelSubsystem(RV32UMOS::kernel, hal);
 }
 
 void RV32UMOS::destroy()
@@ -42,47 +66,47 @@ void RV32UMOS::start()
         return;
     }
 
-    K_HAL->cpu.enableVM(true);
+    CPU_HAL->enableVM(true);
 
-    Interrupt::enable();
+    INTERRUPT_HAL->enable();
     Interrupt::init(K_SCHEDULER);
-    Interrupt::disable();
+    INTERRUPT_HAL->disable();
 
-    K_HAL->timer.start(TIMER_INTERRUPT_FREQUENCY);
+    TIMER_HAL->start(TIMER_INTERRUPT_FREQUENCY);
     LOG(KERNEL, INFO, "rv32umos Booting...");
     K_SCHEDULER->preempt();
-    K_HAL->timer.stop();
+    TIMER_HAL->stop();
 }
 
 void RV32UMOS::runThread()
 {
-    Interrupt::enable();
+    INTERRUPT_HAL->enable();
 
     while (true)
     {
         // atomic check
-        bool prev = Interrupt::disable();
+        bool prev = INTERRUPT_HAL->disable();
         Thread* self = K_PROC_MANAGER->getCurrentThread();
         self->getProcess()->incrementInstruction();
         if (self->getState() == ThreadState::TERMINATED)
         {
-            Interrupt::restore(prev);
+            INTERRUPT_HAL->restore(prev);
             K_SCHEDULER->preempt();
         }
 
         try
         {
             STATS.incInstructions();
-            K_HAL->cpu.step();
-            K_HAL->cpu.advancePC();
+            CPU_HAL->step();
+            CPU_HAL->advancePC();
         }
         catch (SyscallException& sys)
         {
-            K_KERNEL->handleSyscall(sys);
+            RV32UMOS::kernel->handleSyscall(sys);
         }
         catch (PageFaultException& pf)
         {
-            K_KERNEL->handlePageFault(pf);
+            RV32UMOS::kernel->handlePageFault(pf);
         }
         catch (std::exception& e)
         {

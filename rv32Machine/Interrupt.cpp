@@ -21,17 +21,17 @@ bool Interrupt::setStatus(bool enableInterrupts)
 
 void Interrupt::enable()
 {
-    Interrupt::setStatus(true);
+    this->setStatus(true);
 }
 
 bool Interrupt::disable()
 {
-    return Interrupt::setStatus(false);
+    return this->setStatus(false);
 }
 
 void Interrupt::restore(bool status)
 {
-    Interrupt::setStatus(status);
+    this->setStatus(status);
 }
 
 void Interrupt::timerInterruptHandler(int)

@@ -7,21 +7,18 @@ class Scheduler;
 class Interrupt : public Device
 {
 private:
-    Interrupt() = default;
-    ~Interrupt() = default;
-    Interrupt(const Interrupt&) = delete;
-    Interrupt& operator=(const Interrupt&) = delete;
-    static bool setStatus(bool enableInterrupts);
-
-    DeviceType getType() const override;
+    bool setStatus(bool enableInterrupts);
 
 private:
     static Scheduler* scheduler;
 
 public:
-    static void enable();
-    static bool disable();
-    static void restore(bool status);
+    Interrupt() = default;
+    ~Interrupt() = default;
+    void enable();
+    bool disable();
+    void restore(bool status);
+    DeviceType getType() const override;
 
     static void init(Scheduler* sched);
     static void timerInterruptHandler(int signum);

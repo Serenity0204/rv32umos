@@ -13,6 +13,8 @@
 #include "VFSInterface.hpp"
 #include "VirtualMemoryManager.hpp"
 
+class HAL;
+
 class Kernel
 {
 private:
@@ -36,7 +38,7 @@ public:
     Kernel() = default;
     ~Kernel() = default;
 
-    static void initKernelSubsystem(Kernel* kernel);
+    static void initKernelSubsystem(Kernel* kernel, HAL* hal);
     static void destroyKernelSubsystem(Kernel* kernel);
 
     static void handleSyscall(SyscallException& sys);

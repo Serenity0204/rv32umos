@@ -1,18 +1,20 @@
 #include "Kernel.hpp"
+#include "HAL.hpp"
 #include "Interrupt.hpp"
 #include "KernelAlias.hpp"
 #include "KernelPanic.hpp"
 #include "KernelService.hpp"
+#include "SystemConfig.hpp"
 
-void Kernel::initKernelSubsystem(Kernel* kernel)
+void Kernel::initKernelSubsystem(Kernel* kernel, HAL* hal)
 {
     // init HAL
-    kernel->hal = new HAL();
+    kernel->hal = hal;
     KernelService::registerService("hal", kernel->hal);
 
     // init kernel subsystem
     kernel->pmm = new PhysicalMemoryManager();
-    kernel->pmm->init(&kernel->hal->physicalRAM);
+    kernel->pmm->init(MEMORY_HAL);
 
     kernel->procManager = new ProcessManager();
     kernel->scheduler = new Scheduler();
@@ -30,8 +32,8 @@ void Kernel::initKernelSubsystem(Kernel* kernel)
     // init filesystem and swap
     kernel->pageReplacementPolicy = new PageReplacementPolicyImpl();
     kernel->pageReplacementPolicy->init(kernel->pmm->getTotalFrames());
-    kernel->vfs = new VFSImpl(kernel->hal->disk);
-    kernel->swap = new SwapManager(kernel->hal->disk, NUM_DISK_BLOCKS, NUM_SWAP_BLOCKS);
+    kernel->vfs = new VFSImpl(DISK_HAL);
+    kernel->swap = new SwapManager(DISK_HAL, NUM_DISK_BLOCKS, NUM_SWAP_BLOCKS);
 
     KernelService::registerService("prp", kernel->pageReplacementPolicy);
     KernelService::registerService("vfs", kernel->vfs);
@@ -54,30 +56,44 @@ void Kernel::destroyKernelSubsystem(Kernel* kernel)
     delete kernel->alarm;
     delete kernel->pmm;
 
-    delete kernel->hal;
     KernelService::clear();
     Interrupt::init(nullptr);
 }
 
 void Kernel::handleSyscall(SyscallException& sys)
 {
-    bool prev = Interrupt::disable();
-    SyscallStatus status = K_SYSCALLS->dispatch(sys.getSyscallID());
+    bool prev = INTERRUPT_HAL->disable();
+    SyscallContext ctx;
+    ctx.id = sys.getSyscallID();
+    ctx.arg0 = CPU_HAL->readReg(10); // a0
+    ctx.arg1 = CPU_HAL->readReg(11); // a1
+    ctx.arg2 = CPU_HAL->readReg(12); // a2
+    ctx.arg3 = CPU_HAL->readReg(13); // a3
+    ctx.arg4 = CPU_HAL->readReg(14); // a4
+    ctx.arg5 = CPU_HAL->readReg(15); // a5
 
-    if (status.error)
+    SyscallResult result = K_SYSCALLS->dispatch(ctx);
+
+    if (result.hasReturnValue)
+        CPU_HAL->writeReg(10, result.returnValue);
+
+    if (result.advancePC)
+        CPU_HAL->advancePC();
+
+    if (result.error)
     {
         bool killed = K_PROC_MANAGER->killProcess(K_PROC_MANAGER->getCurrentThread()->getProcess()->getPid());
         if (!killed) PANIC("Failed to kill process after Syscall Error!");
         K_SCHEDULER->preempt();
         // never comeback here
     }
-    Interrupt::restore(prev);
-    if (status.needReschedule) K_SCHEDULER->preempt();
+    INTERRUPT_HAL->restore(prev);
+    if (result.needReschedule) K_SCHEDULER->preempt();
 }
 
 void Kernel::handlePageFault(PageFaultException& pf)
 {
-    bool prev = Interrupt::disable();
+    bool prev = INTERRUPT_HAL->disable();
     bool handled = K_VMM->handlePageFault(pf.getFaultAddr());
     if (!handled)
     {
@@ -85,6 +101,6 @@ void Kernel::handlePageFault(PageFaultException& pf)
         if (!killed) PANIC("KERNEL PANIC: Failed to kill process after Segfault!");
         // never comeback here
     }
-    Interrupt::restore(prev);
+    INTERRUPT_HAL->restore(prev);
     if (K_PROC_MANAGER->getCurrentThread()->getState() == ThreadState::BLOCKED) K_SCHEDULER->preempt();
 }

@@ -1,5 +1,5 @@
 #include "Scheduler.hpp"
-#include "Interrupt.hpp"
+#include "HAL.hpp"
 #include "KernelAlias.hpp"
 #include "Logger.hpp"
 #include "Stats.hpp"
@@ -7,13 +7,13 @@
 
 void Scheduler::preempt()
 {
-    bool prev = Interrupt::disable();
+    bool prev = INTERRUPT_HAL->disable();
 
     K_ALARM->tick();
 
     if (K_PROC_MANAGER->activeThreads.empty())
     {
-        Interrupt::restore(prev);
+        INTERRUPT_HAL->restore(prev);
         return;
     }
 
@@ -39,7 +39,7 @@ void Scheduler::preempt()
         bool canRunCurrentProcess = this->checkCurrentThreadRunnable();
         if (canRunCurrentProcess)
         {
-            Interrupt::restore(prev);
+            INTERRUPT_HAL->restore(prev);
             return;
         }
 
@@ -88,7 +88,7 @@ void Scheduler::preempt()
         LOG(SCHEDULER, INFO, "Switching to Thread " + std::to_string(nextThread->getTid()) + " (PID " + std::to_string(proc->getPid()) + ")");
         this->contextSwitch(nextIndex);
     }
-    Interrupt::restore(prev);
+    INTERRUPT_HAL->restore(prev);
 }
 
 void Scheduler::contextSwitch(std::size_t nextIndex)
@@ -102,19 +102,19 @@ void Scheduler::contextSwitch(std::size_t nextIndex)
     // Layer 1: Swap RISC-V State
     if (prevThread != nullptr && prevThread->getState() != ThreadState::TERMINATED)
     {
-        prevThread->getRegs() = K_HAL->cpu.getRegs();
-        prevThread->setPC(K_HAL->cpu.getPC());
+        prevThread->getRegs() = CPU_HAL->getRegs();
+        prevThread->setPC(CPU_HAL->getPC());
 
         if (prevThread->getState() == ThreadState::RUNNING) prevThread->setState(ThreadState::READY);
     }
 
-    K_HAL->cpu.getRegs() = nextThread->getRegs();
-    K_HAL->cpu.setPC(nextThread->getPC());
+    CPU_HAL->getRegs() = nextThread->getRegs();
+    CPU_HAL->setPC(nextThread->getPC());
     nextThread->setState(ThreadState::RUNNING);
 
     // check if it's switch within the same process
     if (prevThread == nullptr || prevThread->getProcess()->getPid() != nextThread->getProcess()->getPid())
-        K_HAL->cpu.setPageTable(nextThread->getProcess()->getPageTable());
+        CPU_HAL->setPageTable(nextThread->getProcess()->getPageTable());
 
     K_PROC_MANAGER->currentThreadIndex = nextIndex;
 

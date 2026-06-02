@@ -1,26 +1,40 @@
 #pragma once
+#include "Common.hpp"
+#include "Device.hpp"
+#include "DeviceMap.hpp"
 #include "DiskInterface.hpp"
 #include "HardwareTimer.hpp"
+#include "Interrupt.hpp"
+#include "KernelAlias.hpp"
 #include "Machine.hpp"
 #include "Memory.hpp"
-#include "SystemConfig.hpp"
+#include <unordered_map>
+#include <vector>
 
-struct HAL
+class HAL
 {
-public:
-    Memory physicalRAM;
-    Machine cpu;
-    HardwareTimer timer;
-    DiskInterface* disk = nullptr;
+private:
+    DeviceMap devices;
 
-    HAL()
+public:
+    HAL() = default;
+    ~HAL() = default;
+
+    // device related
+    template <typename T>
+    inline T* getDevice(DeviceType type) const
     {
-        this->cpu.setMemory(&this->physicalRAM);
-        this->disk = new DiskImpl(NUM_DISK_BLOCKS);
+        return this->devices.getDevice<T>(type);
     }
 
-    ~HAL()
+    inline void registerDevice(Device* dev)
     {
-        delete this->disk;
+        this->devices.registerDevice(dev);
     }
 };
+
+#define CPU_HAL K_HAL->getDevice<Machine>(DeviceType::CPU)
+#define MEMORY_HAL K_HAL->getDevice<Memory>(DeviceType::Memory)
+#define TIMER_HAL K_HAL->getDevice<HardwareTimer>(DeviceType::Timer)
+#define DISK_HAL K_HAL->getDevice<DiskInterface>(DeviceType::Disk)
+#define INTERRUPT_HAL K_HAL->getDevice<Interrupt>(DeviceType::Interrupt)

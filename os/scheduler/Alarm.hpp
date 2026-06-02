@@ -1,5 +1,4 @@
 #pragma once
-#include "ScopedCriticalSection.hpp"
 #include <chrono>
 #include <functional>
 #include <queue>

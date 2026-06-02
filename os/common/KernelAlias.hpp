@@ -17,6 +17,3 @@
 // filesystem related
 #define K_PRP KernelService::get<PageReplacementPolicy>("prp")
 #define K_VFS KernelService::get<VFSInterface>("vfs")
-
-// kernel itself
-#define K_KERNEL KernelService::get<Kernel>("kernel")

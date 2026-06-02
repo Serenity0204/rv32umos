@@ -7,6 +7,20 @@
 
 class Executor;
 
+enum class TrapType
+{
+    None,
+    Syscall,
+    PageFault
+};
+
+// value holds syscallID or fault address
+struct Trap
+{
+    TrapType type = TrapType::None;
+    Word value = 0;
+};
+
 class Machine : public Device
 {
 public:
@@ -23,9 +37,40 @@ public:
     inline void advancePC() { this->pc += 4; }
     inline void setPC(Addr newPc) { this->pc = newPc; }
 
+    // Trap handling
+    inline void setTrap(TrapType type, Word value)
+    {
+        this->trap.type = type;
+        this->trap.value = value;
+    }
+    inline bool hasTrap() const { return this->trap.type != TrapType::None; }
+    inline Trap getTrap() const { return this->trap; }
+    inline void clearTrap()
+    {
+        this->trap.type = TrapType::None;
+        this->trap.value = 0;
+    }
+
     // memory
-    inline Word loadVirtualMemory(Addr vaddr, std::size_t size) { return this->mmu.loadVirtualMemory(vaddr, size); }
-    inline void storeVirtualMemory(Addr vaddr, std::size_t size, Word value) { this->mmu.storeVirtualMemory(vaddr, size, value); }
+    inline Word loadVirtualMemory(Addr vaddr, std::size_t size)
+    {
+        Word val = this->mmu.loadVirtualMemory(vaddr, size);
+        if (this->mmu.hasFault())
+        {
+            this->setTrap(TrapType::PageFault, this->mmu.getFaultAddr());
+            this->mmu.clearFault();
+        }
+        return val;
+    }
+    inline void storeVirtualMemory(Addr vaddr, std::size_t size, Word value)
+    {
+        this->mmu.storeVirtualMemory(vaddr, size, value);
+        if (this->mmu.hasFault())
+        {
+            this->setTrap(TrapType::PageFault, this->mmu.getFaultAddr());
+            this->mmu.clearFault();
+        }
+    }
     inline Word loadPhysicalMemory(Addr paddr, std::size_t size) { return this->mmu.loadPhysicalMemory(paddr, size); }
     inline void storePhysicalMemory(Addr paddr, std::size_t size, Word value) { this->mmu.storePhysicalMemory(paddr, size, value); }
 
@@ -46,6 +91,7 @@ private:
     RegFile regs;
     MMU mmu;
     Addr pc;
+    Trap trap;
 
     Word fetch();
     void execute(Word instr);

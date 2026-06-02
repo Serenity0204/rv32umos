@@ -1,5 +1,4 @@
 #include "MMU.hpp"
-#include "Exception.hpp"
 #include "Logger.hpp"
 #include "Utils.hpp"
 
@@ -32,12 +31,14 @@ void MMU::enableVM(bool enabled)
 Word MMU::loadVirtualMemory(Addr vaddr, std::size_t size)
 {
     Addr paddr = this->translate(vaddr, false, false);
+    if (this->fault) return 0;
     return this->memory->load(paddr, size);
 }
 
 void MMU::storeVirtualMemory(Addr vaddr, std::size_t size, Word value)
 {
     Addr paddr = this->translate(vaddr, true, false);
+    if (this->fault) return;
     this->memory->store(paddr, size, value);
 }
 
@@ -55,6 +56,7 @@ Word MMU::fetch(Addr vaddr)
 {
     // Fetch is always 4 bytes
     Addr paddr = this->translate(vaddr, false, true);
+    if (this->fault) return 0;
     return this->memory->load(paddr, 4);
 }
 
@@ -65,25 +67,42 @@ Addr MMU::translate(Addr vaddr, bool isWrite, bool isExec)
     uint32_t vpn = (vaddr >> 12);
     uint32_t offset = (vaddr & 0xFFF);
 
-    if (this->currentTable == nullptr || this->currentTable->count(vpn) == 0) throw PageFaultException(vaddr);
+    if (this->currentTable == nullptr || this->currentTable->count(vpn) == 0)
+    {
+        this->fault = true;
+        this->faultAddr = vaddr;
+        return 0;
+    }
+
     PTE& pte = this->currentTable->at(vpn);
 
-    if (!pte.valid) throw PageFaultException(vaddr);
+    if (!pte.valid)
+    {
+        this->fault = true;
+        this->faultAddr = vaddr;
+        return 0;
+    }
 
     if (isExec && !pte.canExecute)
     {
         LOG(MMU, ERROR, "Execution Violation at " + Utils::toHex(vaddr));
-        throw PageFaultException(vaddr);
+        this->fault = true;
+        this->faultAddr = vaddr;
+        return 0;
     }
     if (isWrite && !pte.canWrite)
     {
         LOG(MMU, ERROR, "Write Violation at " + Utils::toHex(vaddr));
-        throw PageFaultException(vaddr);
+        this->fault = true;
+        this->faultAddr = vaddr;
+        return 0;
     }
     if (!isWrite && !isExec && !pte.canRead)
     {
         LOG(MMU, ERROR, "Read Violation at " + Utils::toHex(vaddr));
-        throw PageFaultException(vaddr);
+        this->fault = true;
+        this->faultAddr = vaddr;
+        return 0;
     }
 
     pte.referenced = true;

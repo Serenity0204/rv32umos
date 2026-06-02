@@ -1,7 +1,7 @@
 #include "Executor.hpp"
-#include "Machine.hpp"
 #include "Decoder.hpp"
-#include "Exception.hpp"
+#include "Machine.hpp"
+#include "SyscallDefinition.hpp"
 #include "Utils.hpp"
 #include <limits>
 
@@ -276,10 +276,12 @@ void Executor::execECALL(Machine& cpu)
     SyscallID syscallID = static_cast<SyscallID>(cpu.regs[17]);
     bool exist = sysCallNameMap.count(syscallID) > 0;
 
-    if (!exist) throw SyscallException("Unknown syscall ID: " + std::to_string(static_cast<int>(syscallID)), SyscallID::SYS_UNKNOWN);
-
-    std::string syscallName = sysCallNameMap.at(syscallID);
-    throw SyscallException(syscallName, syscallID);
+    if (!exist)
+    {
+        cpu.setTrap(TrapType::Syscall, static_cast<Word>(SyscallID::SYS_UNKNOWN));
+        return;
+    }
+    cpu.setTrap(TrapType::Syscall, static_cast<Word>(syscallID));
 }
 
 // void Executor::execEBREAK(CPU& cpu, Word instr) {}
@@ -299,6 +301,7 @@ void Executor::execLB(Machine& cpu, Word instr)
     Addr addr = cpu.regs[rs1] + imm;
 
     Word val = cpu.loadVirtualMemory(addr, 1);
+    if (cpu.hasTrap()) return;
 
     int32_t signedVal = static_cast<int32_t>(static_cast<int8_t>(val));
     cpu.regs.write(rd, signedVal);
@@ -312,6 +315,7 @@ void Executor::execLH(Machine& cpu, Word instr)
     Addr addr = cpu.regs[rs1] + imm;
 
     Word val = cpu.loadVirtualMemory(addr, 2);
+    if (cpu.hasTrap()) return;
     int32_t signedVal = static_cast<int32_t>(static_cast<int16_t>(val));
     cpu.regs.write(rd, signedVal);
 }
@@ -325,6 +329,7 @@ void Executor::execLW(Machine& cpu, Word instr)
     Addr addr = cpu.regs[rs1] + imm;
 
     Word val = cpu.loadVirtualMemory(addr, 4);
+    if (cpu.hasTrap()) return;
     cpu.regs.write(rd, val);
 }
 void Executor::execLBU(Machine& cpu, Word instr)
@@ -336,6 +341,7 @@ void Executor::execLBU(Machine& cpu, Word instr)
     Addr addr = cpu.regs[rs1] + imm;
 
     Word val = cpu.loadVirtualMemory(addr, 1);
+    if (cpu.hasTrap()) return;
     cpu.regs.write(rd, val & 0xFF);
 }
 void Executor::execLHU(Machine& cpu, Word instr)
@@ -347,6 +353,7 @@ void Executor::execLHU(Machine& cpu, Word instr)
     Addr addr = cpu.regs[rs1] + imm;
 
     Word val = cpu.loadVirtualMemory(addr, 2);
+    if (cpu.hasTrap()) return;
     cpu.regs.write(rd, val & 0xFFFF);
 }
 

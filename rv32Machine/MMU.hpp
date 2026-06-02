@@ -20,6 +20,15 @@ public:
     // fetch instruction
     Word fetch(Addr vaddr);
 
+    // Fault check API for Machine
+    inline bool hasFault() const { return this->fault; }
+    inline Addr getFaultAddr() const { return faultAddr; }
+    inline void clearFault()
+    {
+        this->fault = false;
+        this->faultAddr = 0;
+    }
+
     // Control
     void setPageTable(PageTable* table);
     void enableVM(bool enabled);
@@ -30,6 +39,10 @@ private:
     Memory* memory = nullptr;
     PageTable* currentTable;
     bool vmEnabled;
+
+    // fault handling
+    bool fault = false;
+    Addr faultAddr = 0;
 
     Addr translate(Addr vaddr, bool isWrite, bool isExec);
 };

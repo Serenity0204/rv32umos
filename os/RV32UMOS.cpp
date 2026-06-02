@@ -1,5 +1,4 @@
 #include "RV32UMOS.hpp"
-#include "Exception.hpp"
 #include "HAL.hpp"
 #include "Interrupt.hpp"
 #include "KernelAlias.hpp"
@@ -94,24 +93,30 @@ void RV32UMOS::runThread()
             K_SCHEDULER->preempt();
         }
 
-        try
+        STATS.incInstructions();
+        CPU_HAL->step();
+
+        // traps
+        if (CPU_HAL->hasTrap())
         {
-            STATS.incInstructions();
-            CPU_HAL->step();
-            CPU_HAL->advancePC();
+            Trap trap = CPU_HAL->getTrap();
+            CPU_HAL->clearTrap();
+
+            if (trap.type == TrapType::Syscall)
+            {
+                RV32UMOS::kernel->handleSyscall(static_cast<SyscallID>(trap.value));
+                continue;
+            }
+            if (trap.type == TrapType::PageFault)
+            {
+                RV32UMOS::kernel->handlePageFault(trap.value);
+                continue;
+            }
+            continue;
         }
-        catch (SyscallException& sys)
-        {
-            RV32UMOS::kernel->handleSyscall(sys);
-        }
-        catch (PageFaultException& pf)
-        {
-            RV32UMOS::kernel->handlePageFault(pf);
-        }
-        catch (std::exception& e)
-        {
-            PANIC("Unhandled C++ Exception: " + std::string(e.what()));
-        }
+
+        // instruction succeeded, advance PC
+        CPU_HAL->advancePC();
     }
     PANIC("Unexpected error");
 }

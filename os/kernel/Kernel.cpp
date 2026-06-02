@@ -60,11 +60,11 @@ void Kernel::destroyKernelSubsystem(Kernel* kernel)
     Interrupt::init(nullptr);
 }
 
-void Kernel::handleSyscall(SyscallException& sys)
+void Kernel::handleSyscall(SyscallID id)
 {
     bool prev = INTERRUPT_HAL->disable();
     SyscallContext ctx;
-    ctx.id = sys.getSyscallID();
+    ctx.id = id;
     ctx.arg0 = CPU_HAL->readReg(10); // a0
     ctx.arg1 = CPU_HAL->readReg(11); // a1
     ctx.arg2 = CPU_HAL->readReg(12); // a2
@@ -91,10 +91,10 @@ void Kernel::handleSyscall(SyscallException& sys)
     if (result.needReschedule) K_SCHEDULER->preempt();
 }
 
-void Kernel::handlePageFault(PageFaultException& pf)
+void Kernel::handlePageFault(Addr faultAddr)
 {
     bool prev = INTERRUPT_HAL->disable();
-    bool handled = K_VMM->handlePageFault(pf.getFaultAddr());
+    bool handled = K_VMM->handlePageFault(faultAddr);
     if (!handled)
     {
         bool killed = K_PROC_MANAGER->killProcess(K_PROC_MANAGER->getCurrentThread()->getProcess()->getPid());

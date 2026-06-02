@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Alarm.hpp"
-#include "Exception.hpp"
 #include "HAL.hpp"
 #include "Loader.hpp"
 #include "PageReplacementPolicy.hpp"
@@ -41,6 +40,6 @@ public:
     static void initKernelSubsystem(Kernel* kernel, HAL* hal);
     static void destroyKernelSubsystem(Kernel* kernel);
 
-    static void handleSyscall(SyscallException& sys);
-    static void handlePageFault(PageFaultException& pf);
+    static void handleSyscall(SyscallID id);
+    static void handlePageFault(Addr faultAddr);
 };

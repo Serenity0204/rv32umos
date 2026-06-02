@@ -1,6 +1,5 @@
 #include "Machine.hpp"
 #include "Decoder.hpp"
-#include "Exception.hpp"
 #include "Executor.hpp"
 #include "Utils.hpp"
 
@@ -19,7 +18,13 @@ void Machine::reset()
 
 Word Machine::fetch()
 {
-    return this->mmu.fetch(this->pc);
+    Word val = this->mmu.fetch(this->pc);
+    if (this->mmu.hasFault())
+    {
+        this->setTrap(TrapType::PageFault, this->mmu.getFaultAddr());
+        this->mmu.clearFault();
+    }
+    return val;
 }
 
 void Machine::execute(Word instr)
@@ -317,7 +322,12 @@ void Machine::execute(Word instr)
 
 void Machine::step()
 {
+    this->clearTrap();
     Word instr = this->fetch();
+
+    // if fetching the instruction caused a page fault, abort execution step
+    if (this->hasTrap()) return;
+
     this->execute(instr);
 }
 

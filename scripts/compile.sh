@@ -11,14 +11,16 @@ SOURCE_FILE="$1"
 # Extract directory and base filename
 DIR_NAME=$(dirname "$SOURCE_FILE")
 BASE_NAME=$(basename "$SOURCE_FILE" .c)
-INCLUDE_DIRS="-Ilib -Iprograms"
+INCLUDE_DIRS="-Iuser/lib -Iuser/programs"
 
 # Construct full paths for output files
-OBJ_FILE="${DIR_NAME}/${BASE_NAME}.o"
-ELF_FILE="${DIR_NAME}/${BASE_NAME}.elf"
+OUT_DIR="programs"
+mkdir -p "$OUT_DIR"
+OBJ_FILE="${OUT_DIR}/${BASE_NAME}.o"
+ELF_FILE="${OUT_DIR}/${BASE_NAME}.elf"
 
 # Lib related
-LIB_DIR="lib"
+LIB_DIR="user/lib"
 START_SRC="${LIB_DIR}/start.S"
 START_OBJ="${LIB_DIR}/start.o"
 SYSCALL_SRC="${LIB_DIR}/syscall.c"

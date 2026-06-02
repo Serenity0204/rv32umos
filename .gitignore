@@ -6,8 +6,8 @@ programs/*.bin
 programs/*.o
 programs/*.elf
 
-lib/*.o
-lib/*.bin
+user/lib/*.o
+user/lib/*.bin
 log.txt
 
 process_stats.txt

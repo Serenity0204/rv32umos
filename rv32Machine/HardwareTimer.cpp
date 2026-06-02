@@ -39,3 +39,8 @@ HardwareTimer::~HardwareTimer()
 {
     this->stop();
 }
+
+DeviceType HardwareTimer::getType() const
+{
+    return DeviceType::Timer;
+}

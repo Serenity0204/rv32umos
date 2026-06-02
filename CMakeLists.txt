@@ -13,35 +13,37 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_compile_options(-Wall -Wextra)
 
 include_directories(
-    core/
-    core/common
-    core/disk
-    core/filesystem
-    core/hardware
-    core/kernel
-    core/memory
-    core/process
-    core/scheduler
-    core/sync
-    core/syscall
-    core/thread
+    rv32Machine
+    os/
+    os/hal
+    os/common
+    os/disk
+    os/filesystem
+    os/kernel
+    os/memory
+    os/process
+    os/scheduler
+    os/sync
+    os/syscall
+    os/thread
 )
 
 file(GLOB_RECURSE SOURCES 
-    "core/RV32UMOS.cpp"
-    "core/main.cpp"
-    "core/*.cpp"
-    "core/*.S"
+    "os/RV32UMOS.cpp"
+    "os/main.cpp"
+    "os/*.cpp"
+    "os/*.S"
+    "rv32Machine/*.cpp"
 )
 
 add_executable(rv32umos ${SOURCES})
 
-file(GLOB PROGRAM_SOURCES "programs/*.c")
+file(GLOB PROGRAM_SOURCES "user/programs/*.c")
 set(PROGRAM_BINS "")
 
 foreach(SOURCE_FILE ${PROGRAM_SOURCES})
     get_filename_component(NAME_WE ${SOURCE_FILE} NAME_WE)
-    set(OUTPUT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/programs/${NAME_WE}.bin")
+    set(OUTPUT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/programs/${NAME_WE}.elf")
     
     add_custom_command(
         OUTPUT ${OUTPUT_FILE}

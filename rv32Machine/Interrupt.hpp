@@ -1,17 +1,19 @@
 #pragma once
+#include "Device.hpp"
 #include <signal.h>
 
 class Scheduler;
 
-class Interrupt
+class Interrupt : public Device
 {
-
 private:
     Interrupt() = default;
     ~Interrupt() = default;
     Interrupt(const Interrupt&) = delete;
     Interrupt& operator=(const Interrupt&) = delete;
     static bool setStatus(bool enableInterrupts);
+
+    DeviceType getType() const override;
 
 private:
     static Scheduler* scheduler;

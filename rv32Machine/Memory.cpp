@@ -45,3 +45,8 @@ void Memory::store(Addr addr, std::size_t size, Word value)
         this->memory[index + i] = word;
     }
 }
+
+DeviceType Memory::getType() const
+{
+    return DeviceType::Memory;
+}

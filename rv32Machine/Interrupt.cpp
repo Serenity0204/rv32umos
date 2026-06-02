@@ -45,3 +45,8 @@ void Interrupt::init(Scheduler* sched)
 {
     Interrupt::scheduler = sched;
 }
+
+DeviceType Interrupt::getType() const
+{
+    return DeviceType::Interrupt;
+}

@@ -329,3 +329,8 @@ void Machine::dumpRegisters()
         std::cout << "x" << std::dec << i << ": " << std::hex << this->regs[i] << "\n";
     }
 }
+
+DeviceType Machine::getType() const
+{
+    return DeviceType::CPU;
+}

@@ -1,12 +1,13 @@
 #pragma once
 
 #include "Common.hpp"
+#include "Device.hpp"
 #include "MMU.hpp"
 #include "RegFile.hpp"
 
 class Executor;
 
-class Machine
+class Machine : public Device
 {
 public:
     friend class Executor;
@@ -37,6 +38,8 @@ public:
     inline void setPageTable(PageTable* table) { this->mmu.setPageTable(table); }
     inline void enableVM(bool enabled) { this->mmu.enableVM(enabled); }
     inline void setMemory(Memory* memPtr) { this->mmu.setMemory(memPtr); }
+
+    DeviceType getType() const override;
 
 private:
     // kernel related

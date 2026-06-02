@@ -1,4 +1,5 @@
 #pragma once
+#include "Common.hpp"
 #include <string>
 #include <unordered_map>
 
@@ -44,4 +45,24 @@ inline const std::unordered_map<SyscallID, std::string> sysCallNameMap = {
     {SyscallID::SYS_SBRK, "sbrk syscall"},
     {SyscallID::SYS_CREATE_PROCESS, "create process syscall"},
     {SyscallID::SYS_JOIN_PROCESS, "join process syscall"},
+};
+
+struct SyscallContext
+{
+    SyscallID id;
+    Word arg0; // x10 (a0)
+    Word arg1; // x11 (a1)
+    Word arg2; // x12 (a2)
+    Word arg3; // x13 (a3)
+    Word arg4; // x14 (a4)
+    Word arg5; // x15 (a5)
+};
+
+struct SyscallResult
+{
+    Word returnValue = 0;
+    bool hasReturnValue = true;
+    bool error = false;
+    bool needReschedule = false;
+    bool advancePC = true;
 };

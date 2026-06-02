@@ -6,27 +6,27 @@ class SyscallHandler
 public:
     SyscallHandler() = default;
     ~SyscallHandler() = default;
-    SyscallStatus dispatch(SyscallID id);
+    SyscallResult dispatch(const SyscallContext& ctx);
 
 private:
     // process related
-    void handleExit(SyscallStatus& status);
-    void handleWrite(SyscallStatus& status);
-    void handleRead(SyscallStatus& status);
-    void handleOpen(SyscallStatus& status);
-    void handleClose(SyscallStatus& status);
-    void handleCreate(SyscallStatus& status);
-    void handleSbrk(SyscallStatus& status);
-    void handleCreateProcess(SyscallStatus& status);
-    void handleJoinProcess(SyscallStatus& status);
+    SyscallResult handleExit(const SyscallContext& ctx);
+    SyscallResult handleWrite(const SyscallContext& ctx);
+    SyscallResult handleRead(const SyscallContext& ctx);
+    SyscallResult handleOpen(const SyscallContext& ctx);
+    SyscallResult handleClose(const SyscallContext& ctx);
+    SyscallResult handleCreate(const SyscallContext& ctx);
+    SyscallResult handleSbrk(const SyscallContext& ctx);
+    SyscallResult handleCreateProcess(const SyscallContext& ctx);
+    SyscallResult handleJoinProcess(const SyscallContext& ctx);
 
     // threads related
-    void handleThreadCreate(SyscallStatus& status);
-    void handleThreadExit(SyscallStatus& status);
-    void handleThreadJoin(SyscallStatus& status);
+    SyscallResult handleThreadCreate(const SyscallContext& ctx);
+    SyscallResult handleThreadExit(const SyscallContext& ctx);
+    SyscallResult handleThreadJoin(const SyscallContext& ctx);
 
     // mutex related
-    void handleMutexCreate(SyscallStatus& status);
-    void handleMutexLock(SyscallStatus& status);
-    void handleMutexUnlock(SyscallStatus& status);
+    SyscallResult handleMutexCreate(const SyscallContext& ctx);
+    SyscallResult handleMutexLock(const SyscallContext& ctx);
+    SyscallResult handleMutexUnlock(const SyscallContext& ctx);
 };

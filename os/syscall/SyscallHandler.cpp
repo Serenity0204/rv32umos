@@ -11,73 +11,56 @@
 #include <unistd.h>
 #include <vector>
 
-SyscallStatus SyscallHandler::dispatch(SyscallID id)
+SyscallResult SyscallHandler::dispatch(const SyscallContext& ctx)
 {
     STATS.incSyscalls();
 
-    SyscallStatus status;
-    switch (id)
+    switch (ctx.id)
     {
     case SyscallID::SYS_EXIT:
-        handleExit(status);
-        break;
+        return this->handleExit(ctx);
     case SyscallID::SYS_WRITE:
-        this->handleWrite(status);
-        break;
+        return this->handleWrite(ctx);
     case SyscallID::SYS_READ:
-        this->handleRead(status);
-        break;
+        return this->handleRead(ctx);
     case SyscallID::SYS_THREAD_CREATE:
-        this->handleThreadCreate(status);
-        break;
+        return this->handleThreadCreate(ctx);
     case SyscallID::SYS_THREAD_EXIT:
-        this->handleThreadExit(status);
-        break;
+        return this->handleThreadExit(ctx);
     case SyscallID::SYS_THREAD_JOIN:
-        this->handleThreadJoin(status);
-        break;
+        return this->handleThreadJoin(ctx);
     case SyscallID::SYS_MUTEX_CREATE:
-        this->handleMutexCreate(status);
-        break;
+        return this->handleMutexCreate(ctx);
     case SyscallID::SYS_MUTEX_LOCK:
-        this->handleMutexLock(status);
-        break;
+        return this->handleMutexLock(ctx);
     case SyscallID::SYS_MUTEX_UNLOCK:
-        this->handleMutexUnlock(status);
-        break;
+        return this->handleMutexUnlock(ctx);
     case SyscallID::SYS_OPEN:
-        this->handleOpen(status);
-        break;
+        return this->handleOpen(ctx);
     case SyscallID::SYS_CLOSE:
-        this->handleClose(status);
-        break;
+        return this->handleClose(ctx);
     case SyscallID::SYS_CREATE:
-        this->handleCreate(status);
-        break;
+        return this->handleCreate(ctx);
     case SyscallID::SYS_SBRK:
-        this->handleSbrk(status);
-        break;
+        return this->handleSbrk(ctx);
     case SyscallID::SYS_CREATE_PROCESS:
-        this->handleCreateProcess(status);
-        break;
+        return this->handleCreateProcess(ctx);
     case SyscallID::SYS_JOIN_PROCESS:
-        this->handleJoinProcess(status);
-        break;
+        return this->handleJoinProcess(ctx);
     default:
-        PANIC("Unimplemented syscall id: " + std::to_string((int)id));
-        break;
+        PANIC("Unimplemented syscall id: " + std::to_string((int)ctx.id));
+        SyscallResult result;
+        result.returnValue = (Word)-1;
+        return result;
     }
-
-    return status;
 }
 
-void SyscallHandler::handleThreadJoin(SyscallStatus& status)
+SyscallResult SyscallHandler::handleThreadJoin(const SyscallContext& ctx)
 {
     // reset status
-    status.needReschedule = false;
-    status.error = false;
+    SyscallResult result;
 
-    int targetThreadTid = K_HAL->cpu.readReg(10);
+    int targetThreadTid = ctx.arg0;
     Thread* current = K_PROC_MANAGER->getCurrentThread();
     Process* process = current->getProcess();
 
@@ -98,27 +81,24 @@ void SyscallHandler::handleThreadJoin(SyscallStatus& status)
     if (targetThread == nullptr)
     {
         LOG(SYSCALL, ERROR, "Thread Join Failed: Target Thread ID does not exist " + std::to_string(targetThreadTid));
-        K_HAL->cpu.writeReg(10, -1);
-        K_HAL->cpu.advancePC();
-        return;
+        result.returnValue = -1;
+        return result;
     }
 
     // cannot join itself
     if (targetThread->getTid() == current->getTid())
     {
         LOG(SYSCALL, ERROR, "Thread Join Failed: Cannot join with yourself");
-        K_HAL->cpu.writeReg(10, -1);
-        K_HAL->cpu.advancePC();
-        return;
+        result.returnValue = -1;
+        return result;
     }
 
     // has been joined
     if (targetThread->getHasBeenJoined())
     {
         LOG(SYSCALL, ERROR, "Thread Join Failed: Target Thread with ID " + std::to_string(targetThreadTid) + " has been joined by other threads");
-        K_HAL->cpu.writeReg(10, -1);
-        K_HAL->cpu.advancePC();
-        return;
+        result.returnValue = -1;
+        return result;
     }
 
     // update status
@@ -127,9 +107,8 @@ void SyscallHandler::handleThreadJoin(SyscallStatus& status)
     // target already dead, return success and continue
     if (targetThread->getState() == ThreadState::TERMINATED)
     {
-        K_HAL->cpu.writeReg(10, targetThread->getExitCode());
-        K_HAL->cpu.advancePC();
-        return;
+        result.returnValue = targetThread->getExitCode();
+        return result;
     }
 
     // target still running, block the current thread
@@ -138,16 +117,19 @@ void SyscallHandler::handleThreadJoin(SyscallStatus& status)
     // set the id and block the current thread
     targetThread->setJoiner(current);
     current->setState(ThreadState::BLOCKED);
-    status.needReschedule = true;
+
+    result.needReschedule = true;
+    result.advancePC = false;
+    result.hasReturnValue = false;
+    return result;
 }
 
-void SyscallHandler::handleThreadExit(SyscallStatus& status)
+SyscallResult SyscallHandler::handleThreadExit(const SyscallContext& ctx)
 {
     // reset status
-    status.needReschedule = false;
-    status.error = false;
+    SyscallResult result;
 
-    Word exitCode = K_HAL->cpu.readReg(10);
+    Word exitCode = ctx.arg0;
     Thread* current = K_PROC_MANAGER->getCurrentThread();
 
     current->setState(ThreadState::TERMINATED);
@@ -167,18 +149,19 @@ void SyscallHandler::handleThreadExit(SyscallStatus& status)
         LOG(SYSCALL, INFO, "Thread " + std::to_string(current->getTid()) + " waking up Joiner " + std::to_string(joiner->getTid()));
     }
     // Signal to schedule
-    status.needReschedule = true;
-    return;
+    result.needReschedule = true;
+    result.advancePC = false;
+    result.hasReturnValue = false;
+    return result;
 }
 
-void SyscallHandler::handleThreadCreate(SyscallStatus& status)
+SyscallResult SyscallHandler::handleThreadCreate(const SyscallContext& ctx)
 {
     // reset status
-    status.needReschedule = false;
-    status.error = false;
+    SyscallResult result;
 
-    Word funcPtr = K_HAL->cpu.readReg(10);
-    Word arg = K_HAL->cpu.readReg(11);
+    Word funcPtr = ctx.arg0;
+    Word arg = ctx.arg1;
 
     Thread* current = K_PROC_MANAGER->getCurrentThread();
 
@@ -188,9 +171,8 @@ void SyscallHandler::handleThreadCreate(SyscallStatus& status)
     {
         LOG(SYSCALL, ERROR, "Thread Creation Failed");
         // Return -1 to user
-        K_HAL->cpu.writeReg(10, -1);
-        K_HAL->cpu.advancePC();
-        return;
+        result.returnValue = -1;
+        return result;
     }
     newThread->setupHostContext(reinterpret_cast<void (*)()>(&RV32UMOS::runThread));
     newThread->setState(ThreadState::READY);
@@ -198,24 +180,23 @@ void SyscallHandler::handleThreadCreate(SyscallStatus& status)
 
     LOG(SYSCALL, INFO, "Created Thread " + std::to_string(newThread->getTid()) + " (PID " + std::to_string(proc->getPid()) + ")");
 
-    K_HAL->cpu.writeReg(10, newThread->getTid());
-    K_HAL->cpu.advancePC();
+    result.returnValue = newThread->getTid();
+    return result;
 }
 
-void SyscallHandler::handleWrite(SyscallStatus& status)
+SyscallResult SyscallHandler::handleWrite(const SyscallContext& ctx)
 {
     // reset status
-    status.needReschedule = false;
-    status.error = false;
+    SyscallResult result;
 
     Thread* currentThread = K_PROC_MANAGER->getCurrentThread();
 
     Process* current = currentThread->getProcess();
     LOG(SYSCALL, DEBUG, "Write called by PID " + std::to_string(current->getPid()));
 
-    Word rawFD = K_HAL->cpu.readReg(10);
-    Word addr = K_HAL->cpu.readReg(11);
-    Word count = K_HAL->cpu.readReg(12);
+    Word rawFD = ctx.arg0;
+    Word addr = ctx.arg1;
+    Word count = ctx.arg2;
 
     // get file handle
     int fd = static_cast<int>(rawFD);
@@ -223,40 +204,38 @@ void SyscallHandler::handleWrite(SyscallStatus& status)
     // if not valid
     if (handle == nullptr)
     {
-        K_HAL->cpu.writeReg(10, -1);
-        K_HAL->cpu.advancePC();
-        return;
+        result.returnValue = -1;
+        return result;
     }
 
     std::vector<Byte> buffer(count);
     for (Word i = 0; i < count; ++i)
     {
-        char c = K_HAL->cpu.loadVirtualMemory(addr + static_cast<Addr>(i), 1);
+        char c = CPU_HAL->loadVirtualMemory(addr + static_cast<Addr>(i), 1);
         buffer[i] = c;
     }
 
     // will block if it's disk IO
     int written = handle->write(buffer, count);
-    K_HAL->cpu.writeReg(10, written);
-    K_HAL->cpu.advancePC();
+    result.returnValue = written;
 
-    if (currentThread->getState() == ThreadState::BLOCKED) status.needReschedule = true;
+    if (currentThread->getState() == ThreadState::BLOCKED) result.needReschedule = true;
+    return result;
 }
 
-void SyscallHandler::handleRead(SyscallStatus& status)
+SyscallResult SyscallHandler::handleRead(const SyscallContext& ctx)
 {
     // reset status
-    status.needReschedule = false;
-    status.error = false;
+    SyscallResult result;
 
     Thread* currentThread = K_PROC_MANAGER->getCurrentThread();
     Process* current = currentThread->getProcess();
 
     LOG(SYSCALL, DEBUG, "Read called by PID " + std::to_string(current->getPid()));
 
-    Word rawFD = K_HAL->cpu.readReg(10);
-    Word addr = K_HAL->cpu.readReg(11);
-    Word count = K_HAL->cpu.readReg(12);
+    Word rawFD = ctx.arg0;
+    Word addr = ctx.arg1;
+    Word count = ctx.arg2;
 
     // get file handle
     int fd = static_cast<int>(rawFD);
@@ -264,9 +243,8 @@ void SyscallHandler::handleRead(SyscallStatus& status)
     // if not valid
     if (handle == nullptr)
     {
-        K_HAL->cpu.writeReg(10, -1);
-        K_HAL->cpu.advancePC();
-        return;
+        result.returnValue = -1;
+        return result;
     }
 
     std::vector<Byte> buffer(count);
@@ -278,28 +256,27 @@ void SyscallHandler::handleRead(SyscallStatus& status)
         {
             char rawChar = buffer[i];
             Byte byte = static_cast<uint8_t>(rawChar);
-            K_HAL->cpu.storeVirtualMemory(addr + static_cast<Addr>(i), 1, static_cast<Word>(byte));
+            CPU_HAL->storeVirtualMemory(addr + static_cast<Addr>(i), 1, static_cast<Word>(byte));
         }
     }
-    K_HAL->cpu.writeReg(10, bytesRead);
-    K_HAL->cpu.advancePC();
+    result.returnValue = bytesRead;
 
-    if (currentThread->getState() == ThreadState::BLOCKED) status.needReschedule = true;
+    if (currentThread->getState() == ThreadState::BLOCKED) result.needReschedule = true;
+    return result;
 }
 
-void SyscallHandler::handleOpen(SyscallStatus& status)
+SyscallResult SyscallHandler::handleOpen(const SyscallContext& ctx)
 {
-    status.needReschedule = false;
-    status.error = false;
+    SyscallResult result;
 
-    Word pathAddr = K_HAL->cpu.readReg(10);
+    Word pathAddr = ctx.arg0;
     Thread* currentThread = K_PROC_MANAGER->getCurrentThread();
     std::string filename;
     // read virtual memory string
     std::size_t offset = 0;
     while (true)
     {
-        char c = static_cast<char>(K_HAL->cpu.loadVirtualMemory(pathAddr + offset, 1));
+        char c = static_cast<char>(CPU_HAL->loadVirtualMemory(pathAddr + offset, 1));
         if (c == 0) break;
         filename += c;
         ++offset;
@@ -309,9 +286,8 @@ void SyscallHandler::handleOpen(SyscallStatus& status)
     FileHandleInterface* handle = K_VFS->open(filename);
     if (handle == nullptr)
     {
-        K_HAL->cpu.writeReg(10, -1);
-        K_HAL->cpu.advancePC();
-        return;
+        result.returnValue = -1;
+        return result;
     }
 
     // file exists
@@ -321,44 +297,41 @@ void SyscallHandler::handleOpen(SyscallStatus& status)
 
     if (fd == -1)
     {
-        K_HAL->cpu.writeReg(10, -1);
-        K_HAL->cpu.advancePC();
-        return;
+        result.returnValue = -1;
+        return result;
     }
 
-    K_HAL->cpu.writeReg(10, fd);
-    K_HAL->cpu.advancePC();
+    result.returnValue = fd;
 
-    if (currentThread->getState() == ThreadState::BLOCKED) status.needReschedule = true;
+    if (currentThread->getState() == ThreadState::BLOCKED) result.needReschedule = true;
+    return result;
 }
 
-void SyscallHandler::handleClose(SyscallStatus& status)
+SyscallResult SyscallHandler::handleClose(const SyscallContext& ctx)
 {
-    status.needReschedule = false;
-    status.error = false;
-    Word fd = K_HAL->cpu.readReg(10);
+    SyscallResult result;
+    Word fd = ctx.arg0;
 
     Process* current = K_PROC_MANAGER->getCurrentThread()->getProcess();
     bool ok = current->closeFileHandle(fd);
     int code = ok ? 0 : 1;
-    K_HAL->cpu.writeReg(10, code);
-    K_HAL->cpu.advancePC();
+    result.returnValue = code;
+    return result;
 }
 
-void SyscallHandler::handleCreate(SyscallStatus& status)
+SyscallResult SyscallHandler::handleCreate(const SyscallContext& ctx)
 {
-    status.needReschedule = false;
-    status.error = false;
+    SyscallResult result;
 
-    Word pathAddr = K_HAL->cpu.readReg(10);
-    Word size = K_HAL->cpu.readReg(11);
+    Word pathAddr = ctx.arg0;
+    Word size = ctx.arg1;
     Thread* currentThread = K_PROC_MANAGER->getCurrentThread();
     std::string filename;
     // read virtual memory string
     std::size_t offset = 0;
     while (true)
     {
-        char c = static_cast<char>(K_HAL->cpu.loadVirtualMemory(pathAddr + offset, 1));
+        char c = static_cast<char>(CPU_HAL->loadVirtualMemory(pathAddr + offset, 1));
         if (c == 0) break;
         filename += c;
         ++offset;
@@ -369,25 +342,23 @@ void SyscallHandler::handleCreate(SyscallStatus& status)
     if (!success)
     {
         LOG(SYSCALL, ERROR, "Failed to create file: " + filename);
-        K_HAL->cpu.writeReg(10, -1);
-        K_HAL->cpu.advancePC();
-        return;
+        result.returnValue = -1;
+        return result;
     }
 
     LOG(SYSCALL, INFO, "Created file: " + filename + " (Size: " + std::to_string(size) + ")");
-    K_HAL->cpu.writeReg(10, 0);
-    K_HAL->cpu.advancePC();
+    result.returnValue = 0;
 
-    if (currentThread->getState() == ThreadState::BLOCKED) status.needReschedule = true;
+    if (currentThread->getState() == ThreadState::BLOCKED) result.needReschedule = true;
+    return result;
 }
 
-void SyscallHandler::handleSbrk(SyscallStatus& status)
+SyscallResult SyscallHandler::handleSbrk(const SyscallContext& ctx)
 {
     // reset status
-    status.needReschedule = false;
-    status.error = false;
+    SyscallResult result;
 
-    int increment = static_cast<int>(K_HAL->cpu.readReg(10));
+    int increment = static_cast<int>(ctx.arg0);
     Process* current = K_PROC_MANAGER->getCurrentThread()->getProcess();
     Addr oldBreak = current->sbrk(increment);
 
@@ -395,35 +366,32 @@ void SyscallHandler::handleSbrk(SyscallStatus& status)
     if (oldBreak == 0)
     {
         LOG(SYSCALL, ERROR, "Sbrk failed: Out of Heap Memory");
-        K_HAL->cpu.writeReg(10, -1);
-        K_HAL->cpu.advancePC();
-        return;
+        result.returnValue = -1;
+        return result;
     }
 
     LOG(SYSCALL, DEBUG, "Sbrk successful. New Break: " + Utils::toHex(current->getProgramBreak()));
-    K_HAL->cpu.writeReg(10, oldBreak);
-    K_HAL->cpu.advancePC();
+    result.returnValue = oldBreak;
+    return result;
 }
 
-void SyscallHandler::handleMutexCreate(SyscallStatus& status)
+SyscallResult SyscallHandler::handleMutexCreate(const SyscallContext&)
 {
     // reset status
-    status.needReschedule = false;
-    status.error = false;
+    SyscallResult result;
 
     Thread* current = K_PROC_MANAGER->getCurrentThread();
     int mutexID = current->getProcess()->createMutex();
-    K_HAL->cpu.writeReg(10, mutexID);
-    K_HAL->cpu.advancePC();
+    result.returnValue = mutexID;
+    return result;
 }
 
-void SyscallHandler::handleMutexLock(SyscallStatus& status)
+SyscallResult SyscallHandler::handleMutexLock(const SyscallContext& ctx)
 {
     // reset status
-    status.needReschedule = false;
-    status.error = false;
+    SyscallResult result;
 
-    int mutexID = K_HAL->cpu.readReg(10);
+    int mutexID = ctx.arg0;
     Thread* current = K_PROC_MANAGER->getCurrentThread();
     Process* process = current->getProcess();
     Mutex* lock = process->getMutex(mutexID);
@@ -431,10 +399,9 @@ void SyscallHandler::handleMutexLock(SyscallStatus& status)
     // not valid lock, error
     if (lock == nullptr)
     {
-        status.error = true;
-        K_HAL->cpu.writeReg(10, -1);
-        K_HAL->cpu.advancePC();
-        return;
+        result.error = true;
+        result.returnValue = -1;
+        return result;
     }
 
     bool acquired = lock->acquire(current);
@@ -442,21 +409,22 @@ void SyscallHandler::handleMutexLock(SyscallStatus& status)
     // if lock is held, need to reschedule, and dont advance PC so later when all woke up, it can retry
     if (!acquired)
     {
-        status.needReschedule = true;
-        return;
+        result.needReschedule = true;
+        result.advancePC = false;
+        result.hasReturnValue = false;
+        return result;
     }
 
     // lock is acquired, just advance PC and return 0
-    K_HAL->cpu.writeReg(10, 0);
-    K_HAL->cpu.advancePC();
+    result.returnValue = 0;
+    return result;
 }
-void SyscallHandler::handleMutexUnlock(SyscallStatus& status)
+SyscallResult SyscallHandler::handleMutexUnlock(const SyscallContext& ctx)
 {
     // reset status
-    status.needReschedule = false;
-    status.error = false;
+    SyscallResult result;
 
-    int mutexID = K_HAL->cpu.readReg(10);
+    int mutexID = ctx.arg0;
     Thread* current = K_PROC_MANAGER->getCurrentThread();
     Process* process = current->getProcess();
     Mutex* lock = process->getMutex(mutexID);
@@ -464,10 +432,9 @@ void SyscallHandler::handleMutexUnlock(SyscallStatus& status)
     // not valid lock
     if (lock == nullptr)
     {
-        status.error = true;
-        K_HAL->cpu.writeReg(10, -1);
-        K_HAL->cpu.advancePC();
-        return;
+        result.error = true;
+        result.returnValue = -1;
+        return result;
     }
 
     // try to release
@@ -476,29 +443,27 @@ void SyscallHandler::handleMutexUnlock(SyscallStatus& status)
     // not the owner releasing the lock
     if (!success)
     {
-        status.error = true;
-        K_HAL->cpu.writeReg(10, -1);
-        K_HAL->cpu.advancePC();
-        return;
+        result.error = true;
+        result.returnValue = -1;
+        return result;
     }
 
     // releasing success
-    K_HAL->cpu.writeReg(10, 0);
-    K_HAL->cpu.advancePC();
+    result.returnValue = 0;
+    return result;
 }
 
-void SyscallHandler::handleCreateProcess(SyscallStatus& status)
+SyscallResult SyscallHandler::handleCreateProcess(const SyscallContext& ctx)
 {
-    status.needReschedule = false;
-    status.error = false;
+    SyscallResult result;
 
     // read virtual memory string for filename
-    Word pathAddr = K_HAL->cpu.readReg(10);
+    Word pathAddr = ctx.arg0;
     std::string filename;
     std::size_t offset = 0;
     while (true)
     {
-        char c = static_cast<char>(K_HAL->cpu.loadVirtualMemory(pathAddr + offset, 1));
+        char c = static_cast<char>(CPU_HAL->loadVirtualMemory(pathAddr + offset, 1));
         if (c == 0) break;
         filename += c;
         if (++offset > MAX_FILE_NAME_LENGTH) break;
@@ -508,34 +473,31 @@ void SyscallHandler::handleCreateProcess(SyscallStatus& status)
     if (createdPid == -1)
     {
         LOG(SYSCALL, ERROR, "Create process failed for file: " + filename);
-        K_HAL->cpu.writeReg(10, -1);
-        K_HAL->cpu.advancePC();
-        return;
+        result.returnValue = -1;
+        return result;
     }
-    K_HAL->cpu.writeReg(10, createdPid);
-    K_HAL->cpu.advancePC();
+    result.returnValue = createdPid;
+    return result;
 }
 
-void SyscallHandler::handleJoinProcess(SyscallStatus& status)
+SyscallResult SyscallHandler::handleJoinProcess(const SyscallContext& ctx)
 {
-    status.needReschedule = false;
-    status.error = false;
+    SyscallResult result;
 
-    int targetPid = static_cast<int>(K_HAL->cpu.readReg(10));
-    Word statusPtr = K_HAL->cpu.readReg(11);
+    int targetPid = static_cast<int>(ctx.arg0);
+    Word statusPtr = ctx.arg1;
 
     // Fast Path: process already dead
     if (K_PROC_MANAGER->exitCodes.count(targetPid))
     {
         int exitCode = K_PROC_MANAGER->exitCodes[targetPid];
         if (statusPtr != 0)
-            K_HAL->cpu.storeVirtualMemory(statusPtr, 4, static_cast<Word>(exitCode));
+            CPU_HAL->storeVirtualMemory(statusPtr, 4, static_cast<Word>(exitCode));
 
         K_PROC_MANAGER->exitCodes.erase(targetPid);
-        K_HAL->cpu.writeReg(10, 1);
-        K_HAL->cpu.advancePC();
+        result.returnValue = 1;
         LOG(SYSCALL, INFO, "Join instantly reaped cached Exit Code for PID " + std::to_string(targetPid));
-        return;
+        return result;
     }
 
     bool validPID = (targetPid >= 0) && (targetPid < MAX_PROCESS) && K_PROC_MANAGER->processList[targetPid]->isActive();
@@ -544,37 +506,40 @@ void SyscallHandler::handleJoinProcess(SyscallStatus& status)
     if (!validPID)
     {
         LOG(SYSCALL, ERROR, "Join failed: invalid or inactive PID " + std::to_string(targetPid));
-        K_HAL->cpu.writeReg(10, -1);
-        K_HAL->cpu.advancePC();
-        return;
+        result.returnValue = -1;
+        return result;
     }
 
     // if process still running
     Thread* current = K_PROC_MANAGER->getCurrentThread();
     K_PROC_MANAGER->processWaiters[targetPid].push_back(current);
     current->setState(ThreadState::BLOCKED);
-    status.needReschedule = true;
+
+    result.needReschedule = true;
+    result.advancePC = false;
+    result.hasReturnValue = false;
+
     LOG(SYSCALL, INFO, "Thread " + std::to_string(current->getTid()) + " BLOCKED waiting for PID " + std::to_string(targetPid));
     // PC is NOT advanced. When woken up, it will re-execute and hit Fast Path.
+    return result;
 }
 
-void SyscallHandler::handleExit(SyscallStatus& status)
+SyscallResult SyscallHandler::handleExit(const SyscallContext& ctx)
 {
     // reset status
-    status.needReschedule = false;
-    status.error = false;
+    SyscallResult result;
 
-    Word exitCode = K_HAL->cpu.readReg(10);
+    Word exitCode = ctx.arg0;
     Thread* current = K_PROC_MANAGER->getCurrentThread();
 
     Process* proc = current->getProcess();
     int currentPid = proc->getPid();
 
     bool ok = Process::terminate(currentPid, static_cast<int>(exitCode), false);
-    if (!ok)
-    {
-        PANIC("KERNEL PANIC: Failed to terminate process " + std::to_string(currentPid));
-        return;
-    }
-    status.needReschedule = true;
+    if (!ok) PANIC("KERNEL PANIC: Failed to terminate process " + std::to_string(currentPid));
+
+    result.needReschedule = true;
+    result.advancePC = false;
+    result.hasReturnValue = false;
+    return result;
 }

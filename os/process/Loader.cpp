@@ -1,8 +1,6 @@
 #include "Loader.hpp"
-#include "Kernel.hpp"
 #include "KernelAlias.hpp"
 #include "Logger.hpp"
-#include "RV32UMOS.hpp"
 #include "Segment.hpp"
 #include "Utils.hpp"
 #include <elf.h>
@@ -73,7 +71,6 @@ int Loader::loadELF(const std::string& filename)
         LOG(LOADER, ERROR, "Create process failed " + filename);
         return -1;
     }
-    mainThread->setupHostContext(reinterpret_cast<void (*)()>(&RV32UMOS::runThread));
     mainThread->setState(ThreadState::READY);
 
     K_PROC_MANAGER->activeThreads.push_back(mainThread);

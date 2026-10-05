@@ -10,7 +10,6 @@
 #define K_SCHEDULER KernelService::get<Scheduler>("scheduler")
 #define K_SYSCALLS KernelService::get<SyscallHandler>("syscalls")
 #define K_VMM KernelService::get<VirtualMemoryManager>("vmm")
-#define K_ALARM KernelService::get<Alarm>("alarm")
 #define K_SWAP KernelService::get<SwapManager>("swap")
 #define K_PMM KernelService::get<PhysicalMemoryManager>("pmm")
 

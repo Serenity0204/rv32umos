@@ -4,8 +4,6 @@ enum class DeviceType
 {
     CPU,
     Memory,
-    Interrupt,
-    Timer,
     Disk,
 };
 

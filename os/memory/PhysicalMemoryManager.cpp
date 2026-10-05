@@ -1,6 +1,5 @@
 #include "PhysicalMemoryManager.hpp"
 #include "KernelPanic.hpp"
-#include "TimeModeling.hpp"
 
 void PhysicalMemoryManager::init(Memory* memory)
 {
@@ -14,7 +13,6 @@ void PhysicalMemoryManager::init(Memory* memory)
 
 FrameAllocInfo PhysicalMemoryManager::allocateFrame()
 {
-    TIME_COST(MEMORY_ALLOCATION_TIME, "Memory Allocation");
     // status = false to trigger swap
     FrameAllocInfo info;
     if (this->freeFrames.empty())

@@ -45,16 +45,8 @@ const Addr THREAD_STACK_SIZE = ((VIRTUAL_MEMORY_SIZE / 4) / (MAX_THREADS - 1)) -
 const Addr HEAP_START = VIRTUAL_MEMORY_SIZE / 4;
 const Addr HEAP_MAX_LIMIT = STACK_REGION_BOTTOM;
 
-// for context switch
-const int TIMER_INTERRUPT_FREQUENCY = 25;
-
-// 8 MB
-const std::size_t HOST_STACK_SIZE = 1024 * 1024 * 8;
-
-// constants for timer modeling(ms)
-const std::size_t DISK_IO_TIME = 3;
-const std::size_t FILE_IO_TIME = 1;
-const std::size_t MEMORY_ALLOCATION_TIME = 1;
+// for preemptive scheduling: instructions per quantum (ticks in main loop)
+const int SCHED_QUANTUM_INSTRUCTIONS = 100;
 
 // for disk
 const std::size_t BLOCK_SIZE = 4096;

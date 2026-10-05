@@ -11,3 +11,4 @@ user/lib/*.bin
 log.txt
 
 process_stats.txt
+AGENTS.md

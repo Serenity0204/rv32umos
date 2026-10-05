@@ -1,6 +1,5 @@
 #include "Kernel.hpp"
 #include "HAL.hpp"
-#include "Interrupt.hpp"
 #include "KernelAlias.hpp"
 #include "KernelPanic.hpp"
 #include "KernelService.hpp"
@@ -20,14 +19,12 @@ void Kernel::initKernelSubsystem(Kernel* kernel, HAL* hal)
     kernel->scheduler = new Scheduler();
     kernel->syscalls = new SyscallHandler();
     kernel->vmm = new VirtualMemoryManager();
-    kernel->alarm = new Alarm();
 
     KernelService::registerService("pmm", kernel->pmm);
     KernelService::registerService("procManager", kernel->procManager);
     KernelService::registerService("scheduler", kernel->scheduler);
     KernelService::registerService("syscalls", kernel->syscalls);
     KernelService::registerService("vmm", kernel->vmm);
-    KernelService::registerService("alarm", kernel->alarm);
 
     // init filesystem and swap
     kernel->pageReplacementPolicy = new PageReplacementPolicyImpl();
@@ -53,16 +50,13 @@ void Kernel::destroyKernelSubsystem(Kernel* kernel)
     delete kernel->syscalls;
     delete kernel->scheduler;
     delete kernel->procManager;
-    delete kernel->alarm;
     delete kernel->pmm;
 
     KernelService::clear();
-    Interrupt::init(nullptr);
 }
 
 void Kernel::handleSyscall(SyscallID id)
 {
-    bool prev = INTERRUPT_HAL->disable();
     SyscallContext ctx;
     ctx.id = id;
     ctx.arg0 = CPU_HAL->readReg(10); // a0
@@ -84,23 +78,21 @@ void Kernel::handleSyscall(SyscallID id)
     {
         bool killed = K_PROC_MANAGER->killProcess(K_PROC_MANAGER->getCurrentThread()->getProcess()->getPid());
         if (!killed) PANIC("Failed to kill process after Syscall Error!");
-        K_SCHEDULER->preempt();
-        // never comeback here
+        // No preempt here: synchronous quantum loop in RV32UMOS::start()
+        // will observe TERMINATED state and schedule next thread.
     }
-    INTERRUPT_HAL->restore(prev);
-    if (result.needReschedule) K_SCHEDULER->preempt();
+    // No preempt here either: main loop checks BLOCKED/TERMINATED and
+    // quantum expiry to decide when to call Scheduler::preempt().
 }
 
 void Kernel::handlePageFault(Addr faultAddr)
 {
-    bool prev = INTERRUPT_HAL->disable();
     bool handled = K_VMM->handlePageFault(faultAddr);
     if (!handled)
     {
         bool killed = K_PROC_MANAGER->killProcess(K_PROC_MANAGER->getCurrentThread()->getProcess()->getPid());
         if (!killed) PANIC("KERNEL PANIC: Failed to kill process after Segfault!");
-        // never comeback here
     }
-    INTERRUPT_HAL->restore(prev);
-    if (K_PROC_MANAGER->getCurrentThread()->getState() == ThreadState::BLOCKED) K_SCHEDULER->preempt();
+    // Retry same PC on success (no advance); main loop continues.
+    // On failure the process threads are TERMINATED; main loop schedules.
 }

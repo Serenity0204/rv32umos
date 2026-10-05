@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Alarm.hpp"
 #include "HAL.hpp"
 #include "Loader.hpp"
 #include "PageReplacementPolicy.hpp"
@@ -23,7 +22,6 @@ private:
     PhysicalMemoryManager* pmm = nullptr;
     SyscallHandler* syscalls = nullptr;
     VirtualMemoryManager* vmm = nullptr;
-    Alarm* alarm = nullptr;
     SwapManager* swap = nullptr;
 
     // filesystem related

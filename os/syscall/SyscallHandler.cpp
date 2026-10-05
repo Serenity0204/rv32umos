@@ -4,7 +4,6 @@
 #include "KernelPanic.hpp"
 #include "Loader.hpp"
 #include "Logger.hpp"
-#include "RV32UMOS.hpp"
 #include "Stats.hpp"
 #include "Utils.hpp"
 #include <iostream>
@@ -174,7 +173,6 @@ SyscallResult SyscallHandler::handleThreadCreate(const SyscallContext& ctx)
         result.returnValue = -1;
         return result;
     }
-    newThread->setupHostContext(reinterpret_cast<void (*)()>(&RV32UMOS::runThread));
     newThread->setState(ThreadState::READY);
     K_PROC_MANAGER->activeThreads.push_back(newThread);
 
@@ -189,9 +187,7 @@ SyscallResult SyscallHandler::handleWrite(const SyscallContext& ctx)
     // reset status
     SyscallResult result;
 
-    Thread* currentThread = K_PROC_MANAGER->getCurrentThread();
-
-    Process* current = currentThread->getProcess();
+    Process* current = K_PROC_MANAGER->getCurrentThread()->getProcess();
     LOG(SYSCALL, DEBUG, "Write called by PID " + std::to_string(current->getPid()));
 
     Word rawFD = ctx.arg0;
@@ -215,11 +211,10 @@ SyscallResult SyscallHandler::handleWrite(const SyscallContext& ctx)
         buffer[i] = c;
     }
 
-    // will block if it's disk IO
+    // synchronous: IO completes instantly, never blocks
     int written = handle->write(buffer, count);
     result.returnValue = written;
 
-    if (currentThread->getState() == ThreadState::BLOCKED) result.needReschedule = true;
     return result;
 }
 
@@ -228,8 +223,7 @@ SyscallResult SyscallHandler::handleRead(const SyscallContext& ctx)
     // reset status
     SyscallResult result;
 
-    Thread* currentThread = K_PROC_MANAGER->getCurrentThread();
-    Process* current = currentThread->getProcess();
+    Process* current = K_PROC_MANAGER->getCurrentThread()->getProcess();
 
     LOG(SYSCALL, DEBUG, "Read called by PID " + std::to_string(current->getPid()));
 
@@ -261,7 +255,6 @@ SyscallResult SyscallHandler::handleRead(const SyscallContext& ctx)
     }
     result.returnValue = bytesRead;
 
-    if (currentThread->getState() == ThreadState::BLOCKED) result.needReschedule = true;
     return result;
 }
 
@@ -270,7 +263,6 @@ SyscallResult SyscallHandler::handleOpen(const SyscallContext& ctx)
     SyscallResult result;
 
     Word pathAddr = ctx.arg0;
-    Thread* currentThread = K_PROC_MANAGER->getCurrentThread();
     std::string filename;
     // read virtual memory string
     std::size_t offset = 0;
@@ -303,7 +295,6 @@ SyscallResult SyscallHandler::handleOpen(const SyscallContext& ctx)
 
     result.returnValue = fd;
 
-    if (currentThread->getState() == ThreadState::BLOCKED) result.needReschedule = true;
     return result;
 }
 
@@ -325,7 +316,6 @@ SyscallResult SyscallHandler::handleCreate(const SyscallContext& ctx)
 
     Word pathAddr = ctx.arg0;
     Word size = ctx.arg1;
-    Thread* currentThread = K_PROC_MANAGER->getCurrentThread();
     std::string filename;
     // read virtual memory string
     std::size_t offset = 0;
@@ -349,7 +339,6 @@ SyscallResult SyscallHandler::handleCreate(const SyscallContext& ctx)
     LOG(SYSCALL, INFO, "Created file: " + filename + " (Size: " + std::to_string(size) + ")");
     result.returnValue = 0;
 
-    if (currentThread->getState() == ThreadState::BLOCKED) result.needReschedule = true;
     return result;
 }
 

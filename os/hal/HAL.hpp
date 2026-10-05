@@ -3,8 +3,6 @@
 #include "Device.hpp"
 #include "DeviceMap.hpp"
 #include "DiskInterface.hpp"
-#include "HardwareTimer.hpp"
-#include "Interrupt.hpp"
 #include "KernelAlias.hpp"
 #include "Machine.hpp"
 #include "Memory.hpp"
@@ -35,6 +33,4 @@ public:
 
 #define CPU_HAL K_HAL->getDevice<Machine>(DeviceType::CPU)
 #define MEMORY_HAL K_HAL->getDevice<Memory>(DeviceType::Memory)
-#define TIMER_HAL K_HAL->getDevice<HardwareTimer>(DeviceType::Timer)
 #define DISK_HAL K_HAL->getDevice<DiskInterface>(DeviceType::Disk)
-#define INTERRUPT_HAL K_HAL->getDevice<Interrupt>(DeviceType::Interrupt)

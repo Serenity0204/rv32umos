@@ -2,11 +2,8 @@
 
 #include "Common.hpp"
 #include "RegFile.hpp"
-#include <chrono>
 #include <string>
-#include <vector>
 
-extern "C" void context_switch(void** old_sp, void* new_sp);
 class Process;
 
 enum class ThreadState
@@ -75,11 +72,4 @@ public:
 
 private:
     TCB* tcb;
-
-public:
-    // host level stuff
-    void* hostStackPointer = nullptr;
-    std::vector<char> hostStack;
-    void setupHostContext(void (*wrapper)());
-    uint64_t sleepTimerId = 0;
 };

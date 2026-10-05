@@ -1,8 +1,6 @@
 #include "RV32UMOS.hpp"
 #include "HAL.hpp"
-#include "Interrupt.hpp"
 #include "KernelAlias.hpp"
-#include "KernelPanic.hpp"
 #include "KernelService.hpp"
 #include "Logger.hpp"
 #include "Stats.hpp"
@@ -13,22 +11,19 @@ static HAL* hal = nullptr;
 
 void RV32UMOS::initMachine()
 {
-    // init HAL and devices
+    // init HAL and devices (no host timer / interrupt devices;
+    // preemption is driven synchronously by instruction quantum)
     hal = new HAL();
     Memory* memory = new Memory();
     Machine* cpu = new Machine();
-    HardwareTimer* timer = new HardwareTimer();
     DiskInterface* disk = new DiskImpl(NUM_DISK_BLOCKS);
-    Interrupt* interrupt = new Interrupt();
 
     cpu->setMemory(memory);
 
     // register devices to HAL device map
     hal->registerDevice(memory);
     hal->registerDevice(cpu);
-    hal->registerDevice(timer);
     hal->registerDevice(disk);
-    hal->registerDevice(interrupt);
 }
 
 void RV32UMOS::init()
@@ -67,34 +62,32 @@ void RV32UMOS::start()
 
     CPU_HAL->enableVM(true);
 
-    INTERRUPT_HAL->enable();
-    Interrupt::init(K_SCHEDULER);
-    INTERRUPT_HAL->disable();
-
-    TIMER_HAL->start(TIMER_INTERRUPT_FREQUENCY);
     LOG(KERNEL, INFO, "rv32umos Booting...");
+    LOG(KERNEL, INFO, "Simulation started...");
     K_SCHEDULER->preempt();
-    TIMER_HAL->stop();
-}
 
-void RV32UMOS::runThread()
-{
-    INTERRUPT_HAL->enable();
-
-    while (true)
+    uint64_t ticks = 0;
+    while (!K_SCHEDULER->checkAllTerminated())
     {
-        // atomic check
-        bool prev = INTERRUPT_HAL->disable();
-        Thread* self = K_PROC_MANAGER->getCurrentThread();
-        self->getProcess()->incrementInstruction();
-        if (self->getState() == ThreadState::TERMINATED)
+        if (K_PROC_MANAGER->currentThreadIndex == -1 ||
+            K_PROC_MANAGER->getCurrentThread()->getState() != ThreadState::RUNNING)
         {
-            INTERRUPT_HAL->restore(prev);
             K_SCHEDULER->preempt();
+            if (K_SCHEDULER->checkAllTerminated()) break;
+            if (K_PROC_MANAGER->currentThreadIndex == -1 ||
+                K_PROC_MANAGER->getCurrentThread()->getState() != ThreadState::RUNNING)
+            {
+                LOG(SCHEDULER, ERROR, "Stall: current thread not runnable and no READY thread.");
+                break;
+            }
+            continue;
         }
 
+        Thread* self = K_PROC_MANAGER->getCurrentThread();
+        self->getProcess()->incrementInstruction();
         STATS.incInstructions();
         CPU_HAL->step();
+        ticks++;
 
         // traps
         if (CPU_HAL->hasTrap())
@@ -105,18 +98,24 @@ void RV32UMOS::runThread()
             if (trap.type == TrapType::Syscall)
             {
                 RV32UMOS::kernel->handleSyscall(static_cast<SyscallID>(trap.value));
-                continue;
+                // Syscall handler already advanced PC as needed.
             }
-            if (trap.type == TrapType::PageFault)
+            else if (trap.type == TrapType::PageFault)
             {
                 RV32UMOS::kernel->handlePageFault(trap.value);
-                continue;
+                // On success retry same PC (no advance); on failure
+                // the process was killed (TERMINATED).
             }
+
+            if (self->getState() != ThreadState::RUNNING)
+                K_SCHEDULER->preempt();
+            else if (ticks % SCHED_QUANTUM_INSTRUCTIONS == 0)
+                K_SCHEDULER->preempt();
             continue;
         }
 
         // instruction succeeded, advance PC
         CPU_HAL->advancePC();
+        if (ticks % SCHED_QUANTUM_INSTRUCTIONS == 0) K_SCHEDULER->preempt();
     }
-    PANIC("Unexpected error");
 }

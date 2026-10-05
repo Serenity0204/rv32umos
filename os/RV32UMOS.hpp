@@ -13,9 +13,6 @@ public:
     RV32UMOS(const RV32UMOS&) = delete;
     RV32UMOS& operator=(const RV32UMOS&) = delete;
 
-    // the thread entry
-    static void runThread();
-
     // the OS lifecycle
     static void init();
     static void destroy();

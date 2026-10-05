@@ -5,7 +5,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR})
-project(rv32umos CXX ASM)
+project(rv32umos CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -32,7 +32,6 @@ file(GLOB_RECURSE SOURCES
     "os/RV32UMOS.cpp"
     "os/main.cpp"
     "os/*.cpp"
-    "os/*.S"
     "rv32vm/*.cpp"
 )
 

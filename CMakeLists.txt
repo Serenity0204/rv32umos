@@ -13,25 +13,34 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_compile_options(-Wall -Wextra)
 
 include_directories(
+    .
     rv32vm
-    os/
-    os/hal
-    os/common
-    os/disk
-    os/filesystem
-    os/kernel
-    os/memory
-    os/process
-    os/scheduler
-    os/sync
-    os/syscall
-    os/thread
+    hal
+    common
+    disk
+    filesystem
+    kernel
+    memory
+    process
+    scheduler
+    sync
+    syscall
+    thread
 )
 
 file(GLOB_RECURSE SOURCES 
-    "os/RV32UMOS.cpp"
-    "os/main.cpp"
-    "os/*.cpp"
+    "RV32UMOS.cpp"
+    "main.cpp"
+    "common/*.cpp"
+    "disk/*.cpp"
+    "filesystem/*.cpp"
+    "kernel/*.cpp"
+    "memory/*.cpp"
+    "process/*.cpp"
+    "scheduler/*.cpp"
+    "sync/*.cpp"
+    "syscall/*.cpp"
+    "thread/*.cpp"
     "rv32vm/*.cpp"
 )
 
